@@ -2994,7 +2994,7 @@ iperf_print_results(struct iperf_test *test)
                     avg_jitter += sp->jitter;
                 }
 
-                if (test->hide)
+                if (test->hide && test->num_streams > 1)
                     continue;
 
                 unit_snprintf(ubuf, UNIT_LEN, (double) bytes_sent, 'A');
@@ -3400,7 +3400,7 @@ print_interval_results(struct iperf_test *test, struct iperf_stream *sp, cJSON *
 	}
     }
 
-    if (test->hide)
+    if (test->hide && test->num_streams > 1)
         return;
 
     unit_snprintf(ubuf, UNIT_LEN, (double) (irp->bytes_transferred), 'A');
