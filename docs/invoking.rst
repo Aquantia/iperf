@@ -176,6 +176,7 @@ the executable.
           -d, --debug
                  emit  debugging  output.  Primarily (perhaps exclusively) of use
                  to developers.
+   
           --hide
                  hide stream's info, show just summary information.
    
