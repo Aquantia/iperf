@@ -798,6 +798,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 	{"pacing-timer", required_argument, NULL, OPT_PACING_TIMER},
 	{"connect-timeout", required_argument, NULL, OPT_CONNECT_TIMEOUT},
         {"debug", no_argument, NULL, 'd'},
+        {"hide", no_argument, NULL, OPT_HIDE},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0}
     };
@@ -1118,6 +1119,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 	    case 'd':
 		test->debug = 1;
 		break;
+	    case OPT_HIDE:
+	        test->hide = 1;
+	        break;
 	    case 'I':
 		test->pidfile = strdup(optarg);
 		server_flag = 1;
