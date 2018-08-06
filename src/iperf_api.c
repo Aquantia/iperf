@@ -2992,6 +2992,9 @@ iperf_print_results(struct iperf_test *test)
                     avg_jitter += sp->jitter;
                 }
 
+                if (test->hide)
+                    continue;
+
                 unit_snprintf(ubuf, UNIT_LEN, (double) bytes_sent, 'A');
                 if (sender_time > 0.0) {
                     bandwidth = (double) bytes_sent / (double) sender_time;
@@ -3394,6 +3397,9 @@ print_interval_results(struct iperf_test *test, struct iperf_stream *sp, cJSON *
 		iperf_printf(test, "%s", report_bw_separator);
 	}
     }
+
+    if (test->hide)
+        return;
 
     unit_snprintf(ubuf, UNIT_LEN, (double) (irp->bytes_transferred), 'A');
     if (irp->interval_duration > 0.0) {
