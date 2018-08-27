@@ -136,6 +136,7 @@ struct iperf_settings
 {
     int       domain;               /* AF_INET or AF_INET6 */
     int       socket_bufsize;       /* window size for TCP */
+    int       server_socket_bufsize;/* server window size for TCP */
     int       blksize;              /* size of read/writes (-l) */
     uint64_t  rate;                 /* target data rate for application pacing*/
     uint64_t  fqrate;               /* target data rate for FQ pacing*/
@@ -295,6 +296,8 @@ struct iperf_test
 
     char     *logfile;				/* --logfile option */
     FILE     *outfile;
+
+    char     *test_set_file;		/* file with test for --test-set*/
 
     int       ctrl_sck;
     int       listener;

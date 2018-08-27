@@ -771,6 +771,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"version6", no_argument, NULL, '6'},
         {"tos", required_argument, NULL, 'S'},
         {"dscp", required_argument, NULL, OPT_DSCP},
+        {"test-set", required_argument, NULL, OPT_TEST_SET},
 	{"extra-data", required_argument, NULL, OPT_EXTRA_DATA},
 #if defined(HAVE_FLOWLABEL)
         {"flowlabel", required_argument, NULL, 'L'},
@@ -817,9 +818,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
     int blksize;
     int server_flag, client_flag, rate_flag, duration_flag;
     char *endptr;
-#if defined(HAVE_CPU_AFFINITY)
     char* comma;
-#endif /* HAVE_CPU_AFFINITY */
     char* slash;
     struct xbind_entry *xbe;
     double farg;
@@ -991,6 +990,17 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     return -1;
                 }
                 test->settings->socket_bufsize = (int) farg;
+                comma = strchr(optarg, ',');
+                if (comma != NULL) {
+                    test->settings->server_socket_bufsize = unit_atof(comma + 1);
+                    if (test->settings->server_socket_bufsize > (double)MAX_TCP_BUFFER) {
+                        i_errno = IEBUFSIZE;
+                        return -1;
+                    }
+                }
+                else {
+                    test->settings->server_socket_bufsize = test->settings->socket_bufsize;
+                }
 		client_flag = 1;
                 break;
             case 'B':
@@ -1191,6 +1201,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 	        break;
 	    case OPT_THREAD_AFFINITY:
 	        test->thread_affinity = 1;
+	        break;
+	    case OPT_TEST_SET:
+	        test->test_set_file = strdup(optarg);
 	        break;
 	    case 'h':
 		usage_long(stdout);
@@ -1648,7 +1661,7 @@ send_parameters(struct iperf_test *test)
 	if (test->bidirectional)
 	            cJSON_AddTrueToObject(j, "bidirectional");
 	if (test->settings->socket_bufsize)
-	    cJSON_AddNumberToObject(j, "window", test->settings->socket_bufsize);
+	    cJSON_AddNumberToObject(j, "window", test->settings->server_socket_bufsize);
 	if (test->settings->blksize)
 	    cJSON_AddNumberToObject(j, "len", test->settings->blksize);
 	if (test->settings->rate)
@@ -2373,6 +2386,8 @@ iperf_free_test(struct iperf_test *test)
 	free(test->congestion_used);
     if (test->remote_congestion_used)
 	free(test->remote_congestion_used);
+    if (test->test_set_file)
+	free(test->test_set_file);
     if (test->omit_timer != NULL)
 	tmr_cancel(test->omit_timer);
     if (test->timer != NULL)

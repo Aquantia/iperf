@@ -74,6 +74,8 @@ struct iperf_stream;
 
 #define OPT_MULTITHREAD 21
 #define OPT_THREAD_AFFINITY 22
+  
+#define OPT_TEST_SET 101
 
 /* states */
 #define TEST_START 1

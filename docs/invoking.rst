@@ -304,9 +304,10 @@ the executable.
                  experimental option. Use only with --multithread option.
                  Sets each thread a affinity depending SO_INCOMING_CPU option.
    
-          -w, --window n[KM]
-                 window  size  / socket buffer size (this gets sent to the server
-                 and used on that side too)
+          -w, --window n[KM]/n[KM],m[KM]
+                 window size / socket buffer size (this gets sent to  the  server
+                 and used  on that side too).    You can set different values for
+                 client / server side.
    
           -M, --set-mss n
                  set TCP/SCTP maximum segment size (MTU - 40 bytes)
@@ -393,6 +394,11 @@ the executable.
           --rsa-public-key-path file
                  path to the RSA public key used to encrypt  authentication  cre-
                  dentials (if built with OpenSSL support)
+   
+          --test-set file
+                 sequentially run several test suites, described in script  file.
+                 The server address and port values are inherited from  the  main
+                 test. Tests are described in a JSON format.
    
    
    EXAMPLES
