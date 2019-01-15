@@ -195,6 +195,13 @@ iperf_udp_send(struct iperf_stream *sp)
 
     iperf_time_now(&before);
 
+    if (sp->settings->varlen) {
+        sp->current_varlen++;
+        if (sp->current_varlen > size)
+          sp->current_varlen = 0;
+        size = sp->current_varlen;
+    }
+
     ++sp->packet_count;
 
     if (sp->test->udp_counters_64bit) {
