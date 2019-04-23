@@ -397,7 +397,7 @@ iperf_run_server(struct iperf_test *test)
     int saved_errno;
 #endif /* HAVE_TCP_CONGESTION */
     fd_set read_set, write_set;
-    struct iperf_stream *sp;
+    struct iperf_stream *sp, *sp_bidir;
     struct iperf_time now;
     struct timeval* timeout;
     int flag;
@@ -533,6 +533,8 @@ iperf_run_server(struct iperf_test *test)
                         if (rec_streams_accepted != streams_to_rec) {
                             flag = 0;
                             ++rec_streams_accepted;
+                            if (test->mode == BIDIRECTIONAL)
+                                ++send_streams_accepted;
                         } else if (send_streams_accepted != streams_to_send) {
                             flag = 1;
                             ++send_streams_accepted;
@@ -540,12 +542,18 @@ iperf_run_server(struct iperf_test *test)
 
                         if (flag != -1) {
                             sp = iperf_new_stream(test, s, flag);
+                            if (test->mode == BIDIRECTIONAL)
+                                sp_bidir = iperf_new_stream(test, s, !flag);
                             if (!sp) {
                                 cleanup_server(test);
                                 return -1;
                             }
 
-                            if (sp->sender)
+                            if (test->mode == BIDIRECTIONAL) {
+                                FD_SET(s, &test->write_set);
+                                FD_SET(s, &test->read_set);
+                            }
+                            else if (sp->sender)
                                 FD_SET(s, &test->write_set);
                             else
                                 FD_SET(s, &test->read_set);
@@ -559,12 +567,14 @@ iperf_run_server(struct iperf_test *test)
                              * maintain interactivity with the control channel.
                              */
                             if (test->protocol->id != Pudp ||
-                                (!sp->sender && !test->multithread) ) {
+                                (!sp->sender && !test->multithread) || test->mode == BIDIRECTIONAL) {
                                 setnonblocking(s, 1);
                             }
 
                             if (test->on_new_stream)
                                 test->on_new_stream(sp);
+                            if (test->mode == BIDIRECTIONAL && test->on_new_stream)
+                                test->on_new_stream(sp_bidir);
 
                             flag = -1;
                         }
