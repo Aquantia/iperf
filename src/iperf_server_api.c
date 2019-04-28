@@ -441,14 +441,11 @@ iperf_run_server(struct iperf_test *test)
 
 	iperf_time_now(&now);
 	timeout = tmr_timeout(&now);
-
-
         if (test->mode == BIDIRECTIONAL && rec_streams_accepted == streams_to_rec && send_streams_accepted != streams_to_send) {
             result = 1;
             goto bidir;
         }
         result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
-
         if (result < 0 && errno != EINTR) {
 	    cleanup_server(test);
             i_errno = IESELECT;
@@ -483,9 +480,10 @@ iperf_run_server(struct iperf_test *test)
 		}
                 FD_CLR(test->ctrl_sck, &read_set);                
             }
-            if (test->state == CREATE_STREAMS) {
 
+            if (test->state == CREATE_STREAMS) {
                 if (FD_ISSET(test->prot_listener, &read_set)) {
+
                     if (test->mode == BIDIRECTIONAL && rec_streams_accepted == streams_to_rec) {
                         bidir:
                         tmp_sp = (&test->streams)->slh_first;
