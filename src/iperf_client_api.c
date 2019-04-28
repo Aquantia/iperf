@@ -63,7 +63,6 @@ iperf_create_streams(struct iperf_test *test, int sender)
 
     int orig_bind_port = test->bind_port;
     for (i = 0; i < test->num_streams; ++i) {
-
         if (test->mode != BIDIRECTIONAL || sender) {
             test->bind_port = orig_bind_port;
             if (orig_bind_port)
