@@ -63,18 +63,19 @@ iperf_create_streams(struct iperf_test *test, int sender)
 
     int orig_bind_port = test->bind_port;
     for (i = 0; i < test->num_streams; ++i) {
-        if (test->mode != BIDIRECTIONAL || sender) {
+
+        if (!sender && test->mode == BIDIRECTIONAL && test->ssock == 1) {
+            tmp_sp = (&test->streams)->slh_first;
+            for (j = 0; j < i; ++j)
+                tmp_sp = tmp_sp->streams.sle_next;
+            s = tmp_sp->socket;
+        }
+        else {
             test->bind_port = orig_bind_port;
             if (orig_bind_port)
                 test->bind_port += i;
             if ((s = test->protocol->connect(test)) < 0)
                 return -1;
-        }
-        else {
-            tmp_sp = (&test->streams)->slh_first;
-            for (j = 0; j < i; ++j)
-                tmp_sp = tmp_sp->streams.sle_next;
-            s = tmp_sp->socket;
         }
 
 #if defined(HAVE_TCP_CONGESTION)
