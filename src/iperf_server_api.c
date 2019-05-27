@@ -441,7 +441,7 @@ iperf_run_server(struct iperf_test *test)
 
 	iperf_time_now(&now);
 	timeout = tmr_timeout(&now);
-        if (test->mode == BIDIRECTIONAL && test->ssock == 1 && rec_streams_accepted == streams_to_rec && send_streams_accepted != streams_to_send) {
+        if (iperf_is_bidir_ssock(test) && rec_streams_accepted == streams_to_rec && send_streams_accepted != streams_to_send) {
             result = 1;
             goto bidir;
         }
@@ -484,7 +484,7 @@ iperf_run_server(struct iperf_test *test)
             if (test->state == CREATE_STREAMS) {
                 if (FD_ISSET(test->prot_listener, &read_set)) {
 
-                    if (test->mode == BIDIRECTIONAL && test->ssock == 1 && rec_streams_accepted == streams_to_rec) {
+                    if (iperf_is_bidir_ssock(test) && rec_streams_accepted == streams_to_rec) {
                         bidir:
                         tmp_sp = (&test->streams)->slh_first;
                         for (j = 0; j < send_streams_accepted; ++j)

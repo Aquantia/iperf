@@ -64,7 +64,7 @@ iperf_create_streams(struct iperf_test *test, int sender)
     int orig_bind_port = test->bind_port;
     for (i = 0; i < test->num_streams; ++i) {
 
-        if (!sender && test->mode == BIDIRECTIONAL && test->ssock == 1) {
+        if (!sender && iperf_is_bidir_ssock(test)) {
             tmp_sp = (&test->streams)->slh_first;
             for (j = 0; j < i; ++j)
                 tmp_sp = tmp_sp->streams.sle_next;

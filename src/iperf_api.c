@@ -331,6 +331,12 @@ iperf_get_iperf_version(void)
     return (char*)iperf_version;
 }
 
+int
+iperf_is_bidir_ssock(struct iperf_test* ipt)
+{
+    return ipt->mode == BIDIRECTIONAL && ipt->ssock == 1;
+}
+
 /************** Setter routines for some fields inside iperf_test *************/
 
 void
