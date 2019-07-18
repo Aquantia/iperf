@@ -88,8 +88,11 @@ iperf_server_listen(struct iperf_test *test)
 
     if (!test->json_output) {
 	iperf_printf(test, "-----------------------------------------------------------\n");
-	iperf_printf(test, "Server listening on %d\n", test->server_port);
+	iperf_printf(test, "Server listening on %d", test->server_port);
+    if (test->delay > 0 ) iperf_printf(test, " with max delay = %i\n", test->delay);
+        else iperf_printf(test, "\n");
 	iperf_printf(test, "-----------------------------------------------------------\n");
+
 	if (test->forceflush)
 	    iflush(test);
     }
@@ -207,6 +210,7 @@ iperf_handle_message_server(struct iperf_test *test)
 	    test->state = oldstate;
 
             // XXX: Remove this line below!
+        
 	    iperf_err(test, "the client has terminated");
             SLIST_FOREACH(sp, &test->streams, streams) {
                 FD_CLR(sp->socket, &test->read_set);
@@ -390,7 +394,7 @@ cleanup_server(struct iperf_test *test)
 int
 iperf_run_server(struct iperf_test *test)
 {
-    int result, s;
+    int result = -1, s;
     int send_streams_accepted, rec_streams_accepted;
     int streams_to_send = 0, streams_to_rec = 0;
 #if defined(HAVE_TCP_CONGESTION)
@@ -433,23 +437,33 @@ iperf_run_server(struct iperf_test *test)
     rec_streams_accepted = 0;
 
     while (test->state != IPERF_DONE) {
-
+    	
         memcpy(&read_set, &test->read_set, sizeof(fd_set));
         memcpy(&write_set, &test->write_set, sizeof(fd_set));
 
-	iperf_time_now(&now);
-	timeout = tmr_timeout(&now);
+	    iperf_time_now(&now);
+	    timeout = tmr_timeout(&now);
         result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
+        
+        // Delay
+        if ((test->delay > 0) && (result == 0)){
+            iperf_printf(test, "Delay start -> ");
+            srand(time(NULL));
+            unsigned int i =rand()%(test->delay);
+            usleep(i*1000);
+            iperf_printf(test, "end with %i microseconds\n", i);
+        }
+
         if (result < 0 && errno != EINTR) {
-	    cleanup_server(test);
+	        cleanup_server(test);
             i_errno = IESELECT;
             return -1;
         }
-	if (result > 0) {
+	    if (result > 0) {
             if (FD_ISSET(test->listener, &read_set)) {
                 if (test->state != CREATE_STREAMS) {
                     if (iperf_accept(test) < 0) {
-			cleanup_server(test);
+			            cleanup_server(test);
                         return -1;
                     }
                     FD_CLR(test->listener, &read_set);
@@ -469,9 +483,9 @@ iperf_run_server(struct iperf_test *test)
             }
             if (FD_ISSET(test->ctrl_sck, &read_set)) {
                 if (iperf_handle_message_server(test) < 0) {
-		    cleanup_server(test);
+		        cleanup_server(test);
                     return -1;
-		}
+		        }
                 FD_CLR(test->ctrl_sck, &read_set);                
             }
 
@@ -479,53 +493,53 @@ iperf_run_server(struct iperf_test *test)
                 if (FD_ISSET(test->prot_listener, &read_set)) {
     
                     if ((s = test->protocol->accept(test)) < 0) {
-			cleanup_server(test);
+			            cleanup_server(test);
                         return -1;
-		    }
+		            }
 
 #if defined(HAVE_TCP_CONGESTION)
-		    if (test->protocol->id == Ptcp) {
-			if (test->congestion) {
-			    if (setsockopt(s, IPPROTO_TCP, TCP_CONGESTION, test->congestion, strlen(test->congestion)) < 0) {
-				/*
-				 * ENOENT means we tried to set the
-				 * congestion algorithm but the algorithm
-				 * specified doesn't exist.  This can happen
-				 * if the client and server have different
-				 * congestion algorithms available.  In this
-				 * case, print a warning, but otherwise
-				 * continue.
-				 */
-				if (errno == ENOENT) {
-				    warning("TCP congestion control algorithm not supported");
-				}
-				else {
-				    saved_errno = errno;
-				    close(s);
-				    cleanup_server(test);
-				    errno = saved_errno;
-				    i_errno = IESETCONGESTION;
-				    return -1;
-				}
-			    } 
-			}
-			{
-			    socklen_t len = TCP_CA_NAME_MAX;
-			    char ca[TCP_CA_NAME_MAX + 1];
-			    if (getsockopt(s, IPPROTO_TCP, TCP_CONGESTION, ca, &len) < 0) {
-				saved_errno = errno;
-				close(s);
-				cleanup_server(test);
-				errno = saved_errno;
-				i_errno = IESETCONGESTION;
-				return -1;
-			    }
-			    test->congestion_used = strdup(ca);
-			    if (test->debug) {
-				printf("Congestion algorithm is %s\n", test->congestion_used);
-			    }
-			}
-		    }
+                    if (test->protocol->id == Ptcp) {
+                        if (test->congestion) {
+                            if (setsockopt(s, IPPROTO_TCP, TCP_CONGESTION, test->congestion, strlen(test->congestion)) < 0) {
+                            /*
+                            * ENOENT means we tried to set the
+                            * congestion algorithm but the algorithm
+                            * specified doesn't exist.  This can happen
+                            * if the client and server have different
+                            * congestion algorithms available.  In this
+                            * case, print a warning, but otherwise
+                            * continue.
+                            */
+                                if (errno == ENOENT) {
+                                    warning("TCP congestion control algorithm not supported");
+                                }
+                                else {
+                                    saved_errno = errno;
+                                    close(s);
+                                    cleanup_server(test);
+                                    errno = saved_errno;
+                                    i_errno = IESETCONGESTION;
+                                    return -1;
+                                }
+                            } 
+                        }
+                        {
+                            socklen_t len = TCP_CA_NAME_MAX;
+                            char ca[TCP_CA_NAME_MAX + 1];
+                            if (getsockopt(s, IPPROTO_TCP, TCP_CONGESTION, ca, &len) < 0) {
+                            saved_errno = errno;
+                            close(s);
+                            cleanup_server(test);
+                            errno = saved_errno;
+                            i_errno = IESETCONGESTION;
+                            return -1;
+                            }
+                            test->congestion_used = strdup(ca);
+                            if (test->debug) {
+                            printf("Congestion algorithm is %s\n", test->congestion_used);
+                            }
+                        }
+                    }
 #endif /* HAVE_TCP_CONGESTION */
 
                     if (!is_closed(s)) {
@@ -553,11 +567,11 @@ iperf_run_server(struct iperf_test *test)
                             if (s > test->max_fd) test->max_fd = s;
 
                             /*
-                             * If the protocol isn't UDP, or even if it is but
-                             * we're the receiver, set nonblocking sockets.
-                             * We need this to allow a server receiver to
-                             * maintain interactivity with the control channel.
-                             */
+                                * If the protocol isn't UDP, or even if it is but
+                                * we're the receiver, set nonblocking sockets.
+                                * We need this to allow a server receiver to
+                                * maintain interactivity with the control channel.
+                                */
                             if (test->protocol->id != Pudp ||
                                 (!sp->sender && !test->multithread) ) {
                                 setnonblocking(s, 1);
@@ -580,43 +594,43 @@ iperf_run_server(struct iperf_test *test)
                         if (test->no_delay || test->settings->mss || test->settings->socket_bufsize) {
                             FD_CLR(test->listener, &test->read_set);
                             close(test->listener);
-			    test->listener = 0;
+			                test->listener = 0;
                             if ((s = netannounce(test->settings->domain, Ptcp, test->bind_address, test->server_port)) < 0) {
-				cleanup_server(test);
+				                cleanup_server(test);
                                 i_errno = IELISTEN;
                                 return -1;
                             }
                             test->listener = s;
                             FD_SET(test->listener, &test->read_set);
-			    if (test->listener > test->max_fd) test->max_fd = test->listener;
+			                if (test->listener > test->max_fd) test->max_fd = test->listener;
                         }
                     }
                     test->prot_listener = -1;
-		    if (iperf_set_send_state(test, TEST_START) != 0) {
-			cleanup_server(test);
+                    if (iperf_set_send_state(test, TEST_START) != 0) {
+                        cleanup_server(test);
                         return -1;
-		    }
+                    }
                     if (iperf_init_test(test) < 0) {
-			cleanup_server(test);
+			            cleanup_server(test);
                         return -1;
-		    }
-		    if (create_server_timers(test) < 0) {
-			cleanup_server(test);
+		            }
+		            if (create_server_timers(test) < 0) {
+			            cleanup_server(test);
                         return -1;
-		    }
-		    if (create_server_omit_timer(test) < 0) {
-			cleanup_server(test);
+		            }
+                    if (create_server_omit_timer(test) < 0) {
+                        cleanup_server(test);
                         return -1;
-		    }
-		    if (test->mode != RECEIVER)
-			if (iperf_create_send_timers(test) < 0) {
-			    cleanup_server(test);
-			    return -1;
-			}
-		    if (iperf_set_send_state(test, TEST_RUNNING) != 0) {
-			cleanup_server(test);
+                    }
+		            if (test->mode != RECEIVER)
+                        if (iperf_create_send_timers(test) < 0) {
+                            cleanup_server(test);
+                            return -1;
+                        }
+                    if (iperf_set_send_state(test, TEST_RUNNING) != 0) {
+                        cleanup_server(test);
                         return -1;
-		    }
+                    }
 
                     if (test->multithread)
                         if (iperf_create_threads(test)) {
@@ -628,10 +642,10 @@ iperf_run_server(struct iperf_test *test)
             }
 
             if (test->state == TEST_RUNNING) {
+                
                 if (test->multithread) {
                     if (!test->thrcontrol->started) {
                         int status;
-
                         test->thrcontrol->started = 1;
                         status = pthread_barrier_wait(&test->thrcontrol->initial_barrier);
                         if (status == PTHREAD_BARRIER_SERIAL_THREAD) {
@@ -640,6 +654,7 @@ iperf_run_server(struct iperf_test *test)
                     }
 
                     usleep(1000);
+                    
 
                     if (test->mode != RECEIVER) {
 
@@ -678,12 +693,12 @@ iperf_run_server(struct iperf_test *test)
             }
         }
 
-	if (result == 0 ||
-	    (timeout != NULL && timeout->tv_sec == 0 && timeout->tv_usec == 0)) {
-	    /* Run the timers. */
-	    iperf_time_now(&now);
-	    tmr_run(&now);
-	}
+        if (result == 0 ||
+            (timeout != NULL && timeout->tv_sec == 0 && timeout->tv_usec == 0)) {
+            /* Run the timers. */
+            iperf_time_now(&now);
+            tmr_run(&now);
+        }  
     }
 
     cleanup_server(test);

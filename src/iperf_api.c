@@ -773,6 +773,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"version4", no_argument, NULL, '4'},
         {"version6", no_argument, NULL, '6'},
         {"tos", required_argument, NULL, 'S'},
+        {"delay", required_argument, NULL, 'delay'},
         {"dscp", required_argument, NULL, OPT_DSCP},
         {"test-set", required_argument, NULL, OPT_TEST_SET},
 	{"extra-data", required_argument, NULL, OPT_EXTRA_DATA},
@@ -1045,6 +1046,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 		    return -1;
 		}
 		client_flag = 1;
+                break;
+            case 'delay':
+                test->delay = atoi(optarg);
                 break;
 	    case OPT_DSCP:
                 test->settings->tos = parse_qos(optarg);
