@@ -441,14 +441,6 @@ iperf_run_server(struct iperf_test *test)
 	iperf_time_now(&now);
 	timeout = tmr_timeout(&now);
         result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
-        // Delay
-        if ((test->delay > 0) && (result == 0)){
-            iperf_printf(test, "Delay start -> ");
-            srand(time(NULL));
-            unsigned int i =rand()%(test->delay);
-            usleep(i*1000);
-            iperf_printf(test, "end with %i microseconds\n", i);
-        }
         if (result < 0 && errno != EINTR) {
 	    cleanup_server(test);
             i_errno = IESELECT;
@@ -689,6 +681,13 @@ iperf_run_server(struct iperf_test *test)
 
 	if (result == 0 ||
 	    (timeout != NULL && timeout->tv_sec == 0 && timeout->tv_usec == 0)) {
+            // Delay start
+            if (test->delay > 0){
+                srand(time(NULL));
+                unsigned int i =rand()%(test->delay);
+                usleep(i*1000);
+            }
+            // Delay end
 	    /* Run the timers. */
 	    iperf_time_now(&now);
 	    tmr_run(&now);
