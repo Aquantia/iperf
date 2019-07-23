@@ -315,7 +315,8 @@ Nread(int fd, char *buf, size_t count, int prot)
     register size_t nleft = count;
 
     while (nleft > 0) {
-        r = read(fd, buf, nleft);
+        //r = read(fd, buf, nleft);
+        r = recv(fd, buf, nleft, MSG_WAITALL);
         if (r < 0) {
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
@@ -342,7 +343,8 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
     register size_t nleft = count;
 
     while (nleft > 0) {
-	r = write(fd, buf, nleft);
+	//r = write(fd, buf, nleft);
+    r = send(fd, buf, nleft, NULL);
 	if (r < 0) {
 	    switch (errno) {
 		case EINTR:

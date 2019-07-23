@@ -68,6 +68,20 @@ iperf_udp_recv(struct iperf_stream *sp)
     double    transit = 0, d = 0;
     struct iperf_time sent_time, arrival_time, temp_time;
 
+    if (sp->settings->varlen) {
+        ++sp->current_varlen;
+        int minimum_limit = 8 + sizeof(uint32_t);
+        if (sp->test->udp_counters_64bit)
+            minimum_limit = 8 + sizeof(uint64_t);
+        if (sp->current_varlen > size || sp->current_varlen < minimum_limit)
+            sp->current_varlen = minimum_limit;
+        size = sp->current_varlen;
+    }
+
+    /*
+     * Warning! Nread had been modified. (July 16, 2019)
+     * See file "net.c".
+    */
     r = Nread(sp->socket, sp->buffer, size, Pudp);
 
     /*
@@ -75,8 +89,10 @@ iperf_udp_recv(struct iperf_stream *sp)
      * because the underlying read(2) got a EAGAIN, then skip packet
      * processing.
      */
-    if (r <= 0)
+    if (r <= 0) {
+        --sp->current_varlen;
         return r;
+    }
 
     /* Only count bytes received while we're in the correct state. */
     if (sp->test->state == TEST_RUNNING) {
@@ -196,9 +212,12 @@ iperf_udp_send(struct iperf_stream *sp)
     iperf_time_now(&before);
 
     if (sp->settings->varlen) {
-        sp->current_varlen++;
-        if (sp->current_varlen > size)
-          sp->current_varlen = 0;
+        ++sp->current_varlen;
+        int minimum_limit = 8 + sizeof(uint32_t);
+        if (sp->test->udp_counters_64bit)
+            minimum_limit = 8 + sizeof(uint64_t);
+        if (sp->current_varlen > size || sp->current_varlen < minimum_limit)
+            sp->current_varlen = minimum_limit;
         size = sp->current_varlen;
     }
 
@@ -232,6 +251,10 @@ iperf_udp_send(struct iperf_stream *sp)
 	
     }
 
+    /*
+     * Warning! Nwrite had been modified. (July 16, 2019)
+     * See file "net.c".
+    */
     r = Nwrite(sp->socket, sp->buffer, size, Pudp);
 
     if (r < 0)
