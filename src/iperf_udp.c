@@ -70,9 +70,9 @@ iperf_udp_recv(struct iperf_stream *sp)
 
     if (sp->settings->varlen) {
         ++sp->current_varlen;
-        int minimum_limit = 8 + sizeof(uint32_t);
+        int minimum_limit = sizeof(uint32_t) * 3; // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (32bit counters).
         if (sp->test->udp_counters_64bit)
-            minimum_limit = 8 + sizeof(uint64_t);
+            minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t); // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (64bit counters).
         if (sp->current_varlen > size || sp->current_varlen < minimum_limit)
             sp->current_varlen = minimum_limit;
         size = sp->current_varlen;
@@ -213,9 +213,9 @@ iperf_udp_send(struct iperf_stream *sp)
 
     if (sp->settings->varlen) {
         ++sp->current_varlen;
-        int minimum_limit = 8 + sizeof(uint32_t);
+        int minimum_limit = sizeof(uint32_t) * 3; // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (32bit counters).
         if (sp->test->udp_counters_64bit)
-            minimum_limit = 8 + sizeof(uint64_t);
+            minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t); // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (64bit counters).
         if (sp->current_varlen > size || sp->current_varlen < minimum_limit)
             sp->current_varlen = minimum_limit;
         size = sp->current_varlen;
