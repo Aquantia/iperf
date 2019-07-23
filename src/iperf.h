@@ -68,6 +68,8 @@
 #include <openssl/evp.h>
 #endif // HAVE_SSL
 
+#include <pthread.h>
+
 typedef uint64_t iperf_size_t;
 
 struct iperf_interval_results
@@ -111,6 +113,7 @@ struct iperf_stream_result
     iperf_size_t bytes_received_this_interval;
     iperf_size_t bytes_sent_this_interval;
     iperf_size_t bytes_sent_omit;
+    iperf_size_t bytes_for_previous_interval;
     int stream_prev_total_retrans;
     int stream_retrans;
     int stream_prev_total_sacks;
@@ -212,6 +215,10 @@ struct iperf_stream
 //    struct iperf_stream *next;
     SLIST_ENTRY(iperf_stream) streams;
 
+    /* --multithread use only*/
+    int bytes_sent;
+    int blocks_sent;
+
     void     *data;
 };
 
@@ -242,6 +249,24 @@ enum iperf_mode {
 	SENDER = 1,
 	RECEIVER = 0,
 	BIDIRECTIONAL = -1
+};
+
+struct iperf_thread {
+    int id;
+    pthread_t thread;
+
+    struct iperf_test *test;
+    struct iperf_stream *stream;
+};
+
+struct iperf_threads_control {
+    int num_threads;
+    struct iperf_thread *threads;
+
+    pthread_barrier_t initial_barrier;
+    pthread_mutex_t send_mutex;
+    pthread_mutex_t receive_mutex;
+    int started;
 };
 
 struct iperf_test
@@ -288,12 +313,15 @@ struct iperf_test
     EVP_PKEY  *server_rsa_private_key;
 #endif // HAVE_SSL
 
+    struct iperf_threads_control *thrcontrol;
+
     /* boolean variables for Options */
     int       daemon;                           /* -D option */
     int       one_off;                          /* -1 option */
     int       no_delay;                         /* -N option */
     int       reverse;                          /* -R option */
     int       bidirectional;                    /* --bidirectional */
+    int       ssock;                            /* --ssock - single socket for bidirectional mode */
     int	      verbose;                          /* -V option - verbose mode */
     int	      json_output;                      /* -J option - JSON output */
     int	      zerocopy;                         /* -Z option - use sendfile */
@@ -303,6 +331,8 @@ struct iperf_test
     int       forceflush; /* --forceflush - flushing output at every interval */
     int	      multisend;
     int	      repeating_payload;                /* --repeating-payload */
+    int       multithread;                      /* --multithread option */
+    int       thread_affinity;                  /* --thread-affinity option. Use only with --multithread option */
 
     char     *json_output_string; /* rendered JSON output if json_output is set */
     /* Select related parameters */

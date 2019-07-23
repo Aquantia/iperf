@@ -54,20 +54,29 @@
 int
 iperf_create_streams(struct iperf_test *test, int sender)
 {
-    int i, s;
+    int i, j, s;
 #if defined(HAVE_TCP_CONGESTION)
     int saved_errno;
 #endif /* HAVE_TCP_CONGESTION */
     struct iperf_stream *sp;
+    struct iperf_stream *tmp_sp;
 
     int orig_bind_port = test->bind_port;
     for (i = 0; i < test->num_streams; ++i) {
 
-        test->bind_port = orig_bind_port;
-	if (orig_bind_port)
-	    test->bind_port += i;
-        if ((s = test->protocol->connect(test)) < 0)
-            return -1;
+        if (!sender && iperf_is_bidir_ssock(test)) {
+            tmp_sp = (&test->streams)->slh_first;
+            for (j = 0; j < i; ++j)
+                tmp_sp = tmp_sp->streams.sle_next;
+            s = tmp_sp->socket;
+        }
+        else {
+            test->bind_port = orig_bind_port;
+            if (orig_bind_port)
+                test->bind_port += i;
+            if ((s = test->protocol->connect(test)) < 0)
+                return -1;
+        }
 
 #if defined(HAVE_TCP_CONGESTION)
 	if (test->protocol->id == Ptcp) {
@@ -261,6 +270,9 @@ iperf_handle_message_client(struct iperf_test *test)
             }
             else if (iperf_create_streams(test, test->mode) < 0)
                 return -1;
+            if (test->multithread)
+                if (iperf_create_threads(test))
+                    return -1;
             break;
         case TEST_START:
             if (iperf_init_test(test) < 0)
@@ -513,21 +525,46 @@ iperf_run_client(struct iperf_test * test)
 		}
 	    }
 
+	    if (test->multithread) {
+                if (!test->thrcontrol->started) {
+                    int status;
 
-	    if (test->mode == BIDIRECTIONAL)
-	    {
-                if (iperf_send(test, &write_set) < 0)
-                    return -1;
-                if (iperf_recv(test, &read_set) < 0)
-                    return -1;
-	    } else if (test->mode == SENDER) {
-                // Regular mode. Client sends.
-                if (iperf_send(test, &write_set) < 0)
-                    return -1;
-	    } else {
-                // Reverse mode. Client receives.
-                if (iperf_recv(test, &read_set) < 0)
-                    return -1;
+                    test->thrcontrol->started = 1;
+                    status = pthread_barrier_wait(&test->thrcontrol->initial_barrier);
+                    if (status == PTHREAD_BARRIER_SERIAL_THREAD) {
+                        pthread_barrier_destroy(&test->thrcontrol->initial_barrier);
+                    }
+                }
+
+                usleep(1000);
+
+                if (test->mode != RECEIVER) {
+
+                    test->blocks_sent = 0;
+                    test->bytes_sent = 0;
+
+                    SLIST_FOREACH(sp, &test->streams, streams) {
+                        test->bytes_sent += sp->bytes_sent;
+                        test->blocks_sent += sp->blocks_sent;
+                    }
+                }
+	    }
+	    else {
+                if (test->mode == BIDIRECTIONAL)
+                {
+                    if (iperf_send(test, &write_set) < 0)
+                        return -1;
+                    if (iperf_recv(test, &read_set) < 0)
+                        return -1;
+                } else if (test->mode == SENDER) {
+                    // Regular mode. Client sends.
+                    if (iperf_send(test, &write_set) < 0)
+                        return -1;
+                } else {
+                    // Reverse mode. Client receives.
+                    if (iperf_recv(test, &read_set) < 0)
+                        return -1;
+                }
 	    }
 
 
@@ -548,6 +585,18 @@ iperf_run_client(struct iperf_test * test)
 		    }
 		}
 
+		/* If multisend we must to count the result after stopping all threads */
+		if (test->multithread && test->mode != RECEIVER) {
+
+                    test->blocks_sent = 0;
+                    test->bytes_sent = 0;
+
+                    SLIST_FOREACH(sp, &test->streams, streams) {
+                        test->bytes_sent += sp->bytes_sent;
+                        test->blocks_sent += sp->blocks_sent;
+                    }
+		}
+
 		/* Yes, done!  Send TEST_END. */
 		test->done = 1;
 		cpu_util(test->cpu_util);
@@ -566,6 +615,9 @@ iperf_run_client(struct iperf_test * test)
 		return -1;
 	}
     }
+
+    if (test->multithread)
+            iperf_delete_threads(test);
 
     if (test->json_output) {
 	if (iperf_json_finish(test) < 0)
