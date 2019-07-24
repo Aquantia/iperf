@@ -201,7 +201,6 @@ struct iperf_stream
     int       omitted_cnt_error;
     uint64_t  target;
     int       current_varlen;
-    int       current_varlen_skip_changing_flag;
 
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
