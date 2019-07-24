@@ -68,20 +68,6 @@ iperf_udp_recv(struct iperf_stream *sp)
     double    transit = 0, d = 0;
     struct iperf_time sent_time, arrival_time, temp_time;
 
-    if (sp->settings->varlen) {
-        ++sp->current_varlen;
-        int minimum_limit = sizeof(uint32_t) * 3; // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (32bit counters).
-        if (sp->test->udp_counters_64bit)
-            minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t); // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (64bit counters).
-        if (sp->current_varlen > size || sp->current_varlen < minimum_limit)
-            sp->current_varlen = minimum_limit;
-        size = sp->current_varlen;
-    }
-
-    /*
-     * Warning! Nread had been modified. (July 16, 2019)
-     * See file "net.c".
-    */
     r = Nread(sp->socket, sp->buffer, size, Pudp);
 
     /*
@@ -89,10 +75,8 @@ iperf_udp_recv(struct iperf_stream *sp)
      * because the underlying read(2) got a EAGAIN, then skip packet
      * processing.
      */
-    if (r <= 0) {
-        --sp->current_varlen;
+    if (r <= 0)
         return r;
-    }
 
     /* Only count bytes received while we're in the correct state. */
     if (sp->test->state == TEST_RUNNING) {
@@ -211,13 +195,16 @@ iperf_udp_send(struct iperf_stream *sp)
 
     iperf_time_now(&before);
 
+    /*
+     * If we're using --varlen, each packet will have random size in 
+     * range of [minimum_limit ; sp->settings->blksize].
+     * RNG initializes during connecting client to a server.
+    */
     if (sp->settings->varlen) {
-        ++sp->current_varlen;
         int minimum_limit = sizeof(uint32_t) * 3; // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (32bit counters).
         if (sp->test->udp_counters_64bit)
             minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t); // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (64bit counters).
-        if (sp->current_varlen > size || sp->current_varlen < minimum_limit)
-            sp->current_varlen = minimum_limit;
+        sp->current_varlen = minimum_limit + (int)rand() % (sp->settings->blksize - minimum_limit + 1);
         size = sp->current_varlen;
     }
 
@@ -251,10 +238,6 @@ iperf_udp_send(struct iperf_stream *sp)
 	
     }
 
-    /*
-     * Warning! Nwrite had been modified. (July 16, 2019)
-     * See file "net.c".
-    */
     r = Nwrite(sp->socket, sp->buffer, size, Pudp);
 
     if (r < 0)
@@ -264,7 +247,7 @@ iperf_udp_send(struct iperf_stream *sp)
     sp->result->bytes_sent_this_interval += r;
 
     if (sp->test->debug)
-	printf("sent %d bytes of %d, total %" PRIu64 "\n", r, sp->settings->blksize, sp->result->bytes_sent);
+        printf("sent %d bytes of %d, total %" PRIu64 "\n", r, size, sp->result->bytes_sent);
 
     return r;
 }
@@ -581,6 +564,9 @@ iperf_udp_connect(struct iperf_test *test)
         i_errno = IESTREAMREAD;
         return -1;
     }
+
+    if (test->settings->varlen)
+        srand(time(NULL));
 
     return s;
 }
