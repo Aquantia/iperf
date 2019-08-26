@@ -343,7 +343,7 @@ iperf_connect(struct iperf_test *test)
 	test->ctrl_sck = netdial(test->settings->domain, Ptcp, test->bind_address, 0, test->server_hostname, test->server_port, test->settings->connect_timeout);
 
     if (test->force_udp)
-        if (test->ctrl_sck < 0) test->ctrl_sck=0; //check
+        if (test->ctrl_sck < 0) test->ctrl_sck = 0;
     else 
         if ((test->ctrl_sck < 0)) {
             i_errno = IECONNECT;
@@ -479,9 +479,11 @@ iperf_run_client(struct iperf_test * test)
 	iperf_printf(test, "%s\n", get_system_info());
 	iflush(test);
     }
+
     /* Start the client and connect to the server */
     if (iperf_connect(test) < 0)
         return -1;
+        
     /* Begin calculating CPU utilization */
     cpu_util(NULL);
 
@@ -534,7 +536,7 @@ iperf_run_client(struct iperf_test * test)
                 }
             }
 
-            usleep(1000);
+                usleep(1000);
 
             if (test->mode != RECEIVER) {
 
