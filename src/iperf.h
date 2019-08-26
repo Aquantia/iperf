@@ -295,6 +295,8 @@ struct iperf_test
     char     *remote_congestion_used;		/* what the other side used */
     char     *pidfile;				/* -P option */
 
+    unsigned int delay;         /* --delay server delay*/
+
     char     *logfile;				/* --logfile option */
     FILE     *outfile;
 
@@ -330,6 +332,7 @@ struct iperf_test
     int	      repeating_payload;                /* --repeating-payload */
     int       multithread;                      /* --multithread option */
     int       thread_affinity;                  /* --thread-affinity option. Use only with --multithread option */
+    int       force_udp;                        /* --force-udp  option - witnout answer*/
 
     char     *json_output_string; /* rendered JSON output if json_output is set */
     /* Select related parameters */
