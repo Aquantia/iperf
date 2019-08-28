@@ -57,6 +57,7 @@
 #include <sched.h>
 #include <setjmp.h>
 #include <stdarg.h>
+#include <linux/version.h>
 
 #if defined(HAVE_CPUSET_SETAFFINITY)
 #include <sys/param.h>
@@ -89,6 +90,10 @@
 
 #include <pthread.h>
 #include <sys/sysinfo.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0)
+#define SUPPORT_UDP_LARGE_SEND_OFFLOAD
+#endif
 
 /* Forwards. */
 static int send_parameters(struct iperf_test *test);
@@ -782,7 +787,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"tos", required_argument, NULL, 'S'},
         {"dscp", required_argument, NULL, OPT_DSCP},
         {"test-set", required_argument, NULL, OPT_TEST_SET},
-	{"extra-data", required_argument, NULL, OPT_EXTRA_DATA},
+	    {"extra-data", required_argument, NULL, OPT_EXTRA_DATA},
 #if defined(HAVE_FLOWLABEL)
         {"flowlabel", required_argument, NULL, 'L'},
 #endif /* HAVE_FLOWLABEL */
@@ -803,25 +808,26 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"nstreams", required_argument, NULL, OPT_NUMSTREAMS},
         {"xbind", required_argument, NULL, 'X'},
 #endif
-	{"pidfile", required_argument, NULL, 'I'},
-	{"logfile", required_argument, NULL, OPT_LOGFILE},
-	{"forceflush", no_argument, NULL, OPT_FORCEFLUSH},
-	{"get-server-output", no_argument, NULL, OPT_GET_SERVER_OUTPUT},
-	{"udp-counters-64bit", no_argument, NULL, OPT_UDP_COUNTERS_64BIT},
- 	{"no-fq-socket-pacing", no_argument, NULL, OPT_NO_FQ_SOCKET_PACING},
+	    {"pidfile", required_argument, NULL, 'I'},
+	    {"logfile", required_argument, NULL, OPT_LOGFILE},
+	    {"forceflush", no_argument, NULL, OPT_FORCEFLUSH},
+	    {"get-server-output", no_argument, NULL, OPT_GET_SERVER_OUTPUT},
+	    {"udp-counters-64bit", no_argument, NULL, OPT_UDP_COUNTERS_64BIT},
+ 	    {"no-fq-socket-pacing", no_argument, NULL, OPT_NO_FQ_SOCKET_PACING},
 #if defined(HAVE_SSL)
-    {"username", required_argument, NULL, OPT_CLIENT_USERNAME},
-    {"rsa-public-key-path", required_argument, NULL, OPT_CLIENT_RSA_PUBLIC_KEY},
-    {"rsa-private-key-path", required_argument, NULL, OPT_SERVER_RSA_PRIVATE_KEY},
-    {"authorized-users-path", required_argument, NULL, OPT_SERVER_AUTHORIZED_USERS},
+        {"username", required_argument, NULL, OPT_CLIENT_USERNAME},
+        {"rsa-public-key-path", required_argument, NULL, OPT_CLIENT_RSA_PUBLIC_KEY},
+        {"rsa-private-key-path", required_argument, NULL, OPT_SERVER_RSA_PRIVATE_KEY},
+        {"authorized-users-path", required_argument, NULL, OPT_SERVER_AUTHORIZED_USERS},
 #endif /* HAVE_SSL */
-	{"fq-rate", required_argument, NULL, OPT_FQ_RATE},
-	{"pacing-timer", required_argument, NULL, OPT_PACING_TIMER},
-	{"connect-timeout", required_argument, NULL, OPT_CONNECT_TIMEOUT},
+	    {"fq-rate", required_argument, NULL, OPT_FQ_RATE},
+	    {"pacing-timer", required_argument, NULL, OPT_PACING_TIMER},
+	    {"connect-timeout", required_argument, NULL, OPT_CONNECT_TIMEOUT},
         {"debug", no_argument, NULL, 'd'},
         {"help", no_argument, NULL, 'h'},
         {"multithread", no_argument, NULL, OPT_MULTITHREAD},
         {"thread-affinity", no_argument, NULL, OPT_THREAD_AFFINITY},
+        {"lso-udp-gso", no_argument, NULL, OPT_LSO_UDP_GSO},
         {NULL, 0, NULL, 0}
     };
     int flag;
@@ -845,26 +851,26 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 test->server_port = atoi(optarg);
                 break;
             case 'f':
-		if (!optarg) {
-		    i_errno = IEBADFORMAT;
-		    return -1;
-		}
-		test->settings->unit_format = *optarg;
-		if (test->settings->unit_format == 'k' ||
-		    test->settings->unit_format == 'K' ||
-		    test->settings->unit_format == 'm' ||
-		    test->settings->unit_format == 'M' ||
-		    test->settings->unit_format == 'g' ||
-		    test->settings->unit_format == 'G' ||
-		    test->settings->unit_format == 't' ||
-		    test->settings->unit_format == 'T') {
-			break;
-		}
-		else {
-		    i_errno = IEBADFORMAT;
-		    return -1;
-		}
-                break;
+		        if (!optarg) {
+		            i_errno = IEBADFORMAT;
+		            return -1;
+		        }
+		        test->settings->unit_format = *optarg;
+		        if (test->settings->unit_format == 'k' ||
+		            test->settings->unit_format == 'K' ||
+		            test->settings->unit_format == 'm' ||
+		            test->settings->unit_format == 'M' ||
+		            test->settings->unit_format == 'g' ||
+		            test->settings->unit_format == 'G' ||
+		            test->settings->unit_format == 't' ||
+		            test->settings->unit_format == 'T') {
+			            break;
+		        }
+		        else {
+		            i_errno = IEBADFORMAT;
+		            return -1;
+		        }
+                    break;
             case 'i':
                 /* XXX: could potentially want separate stat collection and reporting intervals,
                    but just set them to be the same for now */
@@ -875,13 +881,13 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 }
                 break;
             case 'D':
-		test->daemon = 1;
-		server_flag = 1;
-	        break;
+		        test->daemon = 1;
+		        server_flag = 1;
+	            break;
             case '1':
-		test->one_off = 1;
-		server_flag = 1;
-	        break;
+		        test->one_off = 1;
+		        server_flag = 1;
+	            break;
             case 'V':
                 test->verbose = 1;
                 break;
@@ -890,26 +896,26 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 break;
             case 'v':
                 printf("%s (cJSON %s)\n%s\n%s\n", version, cJSON_Version(), get_system_info(),
-		       get_optional_features());
+		        get_optional_features());
                 exit(0);
             case 's':
                 if (test->role == 'c') {
                     i_errno = IESERVCLIENT;
                     return -1;
                 }
-		iperf_set_test_role(test, 's');
+		        iperf_set_test_role(test, 's');
                 break;
             case 'c':
                 if (test->role == 's') {
                     i_errno = IESERVCLIENT;
                     return -1;
                 }
-		iperf_set_test_role(test, 'c');
-		iperf_set_test_server_hostname(test, optarg);
+		        iperf_set_test_role(test, 'c');
+		        iperf_set_test_server_hostname(test, optarg);
                 break;
             case 'u':
                 set_protocol(test, Pudp);
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case OPT_SCTP:
 #if defined(HAVE_SCTP)
@@ -920,7 +926,6 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 i_errno = IEUNIMP;
                 return -1;
 #endif /* HAVE_SCTP */
-
             case OPT_NUMSTREAMS:
 #if defined(linux) || defined(__FreeBSD__)
                 test->settings->num_ostreams = unit_atoi(optarg);
@@ -930,20 +935,20 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 return -1;
 #endif /* linux */
             case 'b':
-		slash = strchr(optarg, '/');
-		if (slash) {
-		    *slash = '\0';
-		    ++slash;
-		    test->settings->burst = atoi(slash);
-		    if (test->settings->burst <= 0 ||
-		        test->settings->burst > MAX_BURST) {
-			i_errno = IEBURST;
-			return -1;
-		    }
-		}
+		        slash = strchr(optarg, '/');
+		        if (slash) {
+		            *slash = '\0';
+		            ++slash;
+		            test->settings->burst = atoi(slash);
+		            if (test->settings->burst <= 0 ||
+		                test->settings->burst > MAX_BURST) {
+			                i_errno = IEBURST;
+			            return -1;
+		            }
+		        }
                 test->settings->rate = unit_atof_rate(optarg);
-		rate_flag = 1;
-		client_flag = 1;
+		        rate_flag = 1;
+		        client_flag = 1;
                 break;
             case 't':
                 test->duration = atoi(optarg);
@@ -951,20 +956,20 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     i_errno = IEDURATION;
                     return -1;
                 }
-		duration_flag = 1;
-		client_flag = 1;
+		        duration_flag = 1;
+		        client_flag = 1;
                 break;
             case 'n':
                 test->settings->bytes = unit_atoi(optarg);
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'k':
                 test->settings->blocks = unit_atoi(optarg);
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'l':
                 blksize = unit_atoi(optarg);
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'P':
                 test->num_streams = atoi(optarg);
@@ -972,15 +977,15 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     i_errno = IENUMSTREAMS;
                     return -1;
                 }
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'R':
                 if (test->bidirectional) {
                     i_errno = IEREVERSEBIDIR;
                     return -1;
                 }
-		iperf_set_test_reverse(test, 1);
-		client_flag = 1;
+		        iperf_set_test_reverse(test, 1);
+		        client_flag = 1;
                 break;
             case OPT_BIDIRECTIONAL:
                 if (test->reverse) {
@@ -1001,8 +1006,8 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 break;
             case 'w':
                 // XXX: This is a socket buffer, not specific to TCP
-		// Do sanity checks as double-precision floating point 
-		// to avoid possible integer overflows.
+		        // Do sanity checks as double-precision floating point 
+		        // to avoid possible integer overflows.
                 farg = unit_atof(optarg);
                 if (farg > (double) MAX_TCP_BUFFER) {
                     i_errno = IEBUFSIZE;
@@ -1020,7 +1025,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 else {
                     test->settings->server_socket_bufsize = test->settings->socket_bufsize;
                 }
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'B':
                 test->bind_address = strdup(optarg);
@@ -1034,11 +1039,11 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     i_errno = IEMSS;
                     return -1;
                 }
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'N':
                 test->no_delay = 1;
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case '4':
                 test->settings->domain = AF_INET;
@@ -1048,53 +1053,53 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 break;
             case 'S':
                 test->settings->tos = strtol(optarg, &endptr, 0);
-		if (endptr == optarg ||
-		    test->settings->tos < 0 ||
-		    test->settings->tos > 255) {
-		    i_errno = IEBADTOS;
-		    return -1;
-		}
-		client_flag = 1;
+		        if (endptr == optarg ||
+		            test->settings->tos < 0 ||
+		            test->settings->tos > 255) {
+		                i_errno = IEBADTOS;
+		                return -1;
+		        }
+		        client_flag = 1;
                 break;
-	    case OPT_DSCP:
+	        case OPT_DSCP:
                 test->settings->tos = parse_qos(optarg);
-		if(test->settings->tos < 0) {
-			i_errno = IEBADTOS;
-			return -1;
-		}
-		client_flag = 1;
+		        if(test->settings->tos < 0) {
+			        i_errno = IEBADTOS;
+			        return -1;
+		        }
+		        client_flag = 1;
                 break;
-	    case OPT_EXTRA_DATA:
-		test->extra_data = strdup(optarg);
-		client_flag = 1;
-	        break;
+	        case OPT_EXTRA_DATA:
+		        test->extra_data = strdup(optarg);
+		        client_flag = 1;
+	            break;
             case 'L':
 #if defined(HAVE_FLOWLABEL)
                 test->settings->flowlabel = strtol(optarg, &endptr, 0);
-		if (endptr == optarg ||
-		    test->settings->flowlabel < 1 || test->settings->flowlabel > 0xfffff) {
-                    i_errno = IESETFLOW;
-                    return -1;
-		}
-		client_flag = 1;
+		        if (endptr == optarg ||
+		            test->settings->flowlabel < 1 || test->settings->flowlabel > 0xfffff) {
+                        i_errno = IESETFLOW;
+                        return -1;
+		        }
+		        client_flag = 1;
 #else /* HAVE_FLOWLABEL */
                 i_errno = IEUNIMP;
                 return -1;
 #endif /* HAVE_FLOWLABEL */
                 break;
             case 'X':
-		xbe = (struct xbind_entry *)malloc(sizeof(struct xbind_entry));
+		        xbe = (struct xbind_entry *)malloc(sizeof(struct xbind_entry));
                 if (!xbe) {
-		    i_errno = IESETSCTPBINDX;
+		            i_errno = IESETSCTPBINDX;
                     return -1;
                 }
-	        memset(xbe, 0, sizeof(*xbe));
+	            memset(xbe, 0, sizeof(*xbe));
                 xbe->name = strdup(optarg);
                 if (!xbe->name) {
-		    i_errno = IESETSCTPBINDX;
+		            i_errno = IESETSCTPBINDX;
                     return -1;
                 }
-		TAILQ_INSERT_TAIL(&test->xbind_addrs, xbe, link);
+		        TAILQ_INSERT_TAIL(&test->xbind_addrs, xbe, link);
                 break;
             case 'Z':
                 if (!has_sendfile()) {
@@ -1102,7 +1107,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     return -1;
                 }
                 test->zerocopy = 1;
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case OPT_REPEATING_PAYLOAD:
                 test->repeating_payload = 1;
@@ -1114,7 +1119,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     i_errno = IEOMIT;
                     return -1;
                 }
-		client_flag = 1;
+		        client_flag = 1;
                 break;
             case 'F':
                 test->diskfile_name = optarg;
@@ -1123,19 +1128,19 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 #if defined(HAVE_CPU_AFFINITY)
                 test->affinity = strtol(optarg, &endptr, 0);
                 if (endptr == optarg || 
-		    test->affinity < 0 || test->affinity > 1024) {
-                    i_errno = IEAFFINITY;
-                    return -1;
+		            test->affinity < 0 || test->affinity > 1024) {
+                        i_errno = IEAFFINITY;
+                        return -1;
                 }
-		comma = strchr(optarg, ',');
-		if (comma != NULL) {
-		    test->server_affinity = atoi(comma+1);
-		    if (test->server_affinity < 0 || test->server_affinity > 1024) {
-			i_errno = IEAFFINITY;
-			return -1;
-		    }
-		    client_flag = 1;
-		}
+		        comma = strchr(optarg, ',');
+		        if (comma != NULL) {
+		            test->server_affinity = atoi(comma+1);
+		            if (test->server_affinity < 0 || test->server_affinity > 1024) {
+			            i_errno = IEAFFINITY;
+			            return -1;
+		            }
+		            client_flag = 1;
+		        }
 #else /* HAVE_CPU_AFFINITY */
                 i_errno = IEUNIMP;
                 return -1;
@@ -1143,84 +1148,91 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 break;
             case 'T':
                 test->title = strdup(optarg);
-		client_flag = 1;
+		        client_flag = 1;
                 break;
-	    case 'C':
+	        case 'C':
 #if defined(HAVE_TCP_CONGESTION)
-		test->congestion = strdup(optarg);
-		client_flag = 1;
+		        test->congestion = strdup(optarg);
+		        client_flag = 1;
 #else /* HAVE_TCP_CONGESTION */
-		i_errno = IEUNIMP;
-		return -1;
+		        i_errno = IEUNIMP;
+		        return -1;
 #endif /* HAVE_TCP_CONGESTION */
-		break;
-	    case 'd':
-		test->debug = 1;
-		break;
-	    case 'I':
-		test->pidfile = strdup(optarg);
-		server_flag = 1;
-	        break;
-	    case OPT_LOGFILE:
-		test->logfile = strdup(optarg);
-		break;
-	    case OPT_FORCEFLUSH:
-		test->forceflush = 1;
-		break;
-	    case OPT_GET_SERVER_OUTPUT:
-		test->get_server_output = 1;
-		client_flag = 1;
-		break;
-	    case OPT_UDP_COUNTERS_64BIT:
-		test->udp_counters_64bit = 1;
-		break;
-	    case OPT_NO_FQ_SOCKET_PACING:
+		        break;
+	        case 'd':
+                test->debug = 1;
+                break;
+            case 'I':
+                test->pidfile = strdup(optarg);
+                server_flag = 1;
+                break;
+            case OPT_LOGFILE:
+                test->logfile = strdup(optarg);
+                break;
+            case OPT_FORCEFLUSH:
+                test->forceflush = 1;
+                break;
+            case OPT_GET_SERVER_OUTPUT:
+                test->get_server_output = 1;
+                client_flag = 1;
+                break;
+            case OPT_UDP_COUNTERS_64BIT:
+                test->udp_counters_64bit = 1;
+                break;
+            case OPT_NO_FQ_SOCKET_PACING:
 #if defined(HAVE_SO_MAX_PACING_RATE)
-		printf("Warning:  --no-fq-socket-pacing is deprecated\n");
-		test->settings->fqrate = 0;
-		client_flag = 1;
+                printf("Warning:  --no-fq-socket-pacing is deprecated\n");
+                test->settings->fqrate = 0;
+                client_flag = 1;
 #else /* HAVE_SO_MAX_PACING_RATE */
-		i_errno = IEUNIMP;
-		return -1;
+                i_errno = IEUNIMP;
+                return -1;
 #endif
-		break;
-	    case OPT_FQ_RATE:
+		        break;
+	        case OPT_FQ_RATE:
 #if defined(HAVE_SO_MAX_PACING_RATE)
-		test->settings->fqrate = unit_atof_rate(optarg);
-		client_flag = 1;
+                test->settings->fqrate = unit_atof_rate(optarg);
+                client_flag = 1;
 #else /* HAVE_SO_MAX_PACING_RATE */
-		i_errno = IEUNIMP;
-		return -1;
+                i_errno = IEUNIMP;
+                return -1;
 #endif
-		break;
+		        break;
 #if defined(HAVE_SSL)
-        case OPT_CLIENT_USERNAME:
-            client_username = strdup(optarg);
-            break;
-        case OPT_CLIENT_RSA_PUBLIC_KEY:
-            client_rsa_public_key = strdup(optarg);
-            break;
-        case OPT_SERVER_RSA_PRIVATE_KEY:
-            server_rsa_private_key = strdup(optarg);
-            break;
-        case OPT_SERVER_AUTHORIZED_USERS:
-            test->server_authorized_users = strdup(optarg);
-            break;
+            case OPT_CLIENT_USERNAME:
+                client_username = strdup(optarg);
+                break;
+            case OPT_CLIENT_RSA_PUBLIC_KEY:
+                client_rsa_public_key = strdup(optarg);
+                break;
+            case OPT_SERVER_RSA_PRIVATE_KEY:
+                server_rsa_private_key = strdup(optarg);
+                break;
+            case OPT_SERVER_AUTHORIZED_USERS:
+                test->server_authorized_users = strdup(optarg);
+                break;
 #endif /* HAVE_SSL */
-	    case OPT_PACING_TIMER:
-		test->settings->pacing_timer = unit_atoi(optarg);
-		client_flag = 1;
-		break;
-	    case OPT_CONNECT_TIMEOUT:
-		test->settings->connect_timeout = unit_atoi(optarg);
-		client_flag = 1;
-		break;
-	    case OPT_TEST_SET:
-		test->test_set_file = strdup(optarg);
-		break;
-	    case 'h':
-		usage_long(stdout);
-		exit(0);
+            case OPT_PACING_TIMER:
+                test->settings->pacing_timer = unit_atoi(optarg);
+                client_flag = 1;
+                break;
+            case OPT_CONNECT_TIMEOUT:
+                test->settings->connect_timeout = unit_atoi(optarg);
+                client_flag = 1;
+                break;
+            case OPT_TEST_SET:
+                test->test_set_file = strdup(optarg);
+                break;
+            case 'h':
+                usage_long(stdout);
+                exit(0);
+            case OPT_LSO_UDP_GSO:
+#if defined(SUPPORT_UDP_LARGE_SEND_OFFLOAD)
+                test->settings->lso_udp_gso = 1;
+#else
+                warning("Your configuration isn't supporting generic segmentation offload for udp protocol");
+#endif
+                break;
             default:
                 usage_long(stderr);
                 exit(1);
