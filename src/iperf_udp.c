@@ -225,7 +225,17 @@ iperf_udp_send(struct iperf_stream *sp)
 	
     }
 
-    r = Nwrite(sp->socket, sp->buffer, size, Pudp);
+    struct msghdr msg   = { 0 };
+    struct iovec iov    = { 0 };
+
+    iov.iov_base        = sp->buffer;
+    iov.iov_len         = size;
+
+    msg.msg_iov         = &iov;
+    msg.msg_iovlen      = 1;
+
+    r = Nsendmsg(sp->socket, &msg);
+    //r = Nwrite(sp->socket, sp->buffer, size, Pudp);
 
     if (r < 0)
 	return r;

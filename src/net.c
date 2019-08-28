@@ -368,6 +368,42 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
 
 
 int
+Nsendmsg(int fd, struct msghdr *msg)
+{
+    register ssize_t r;
+    register ssize_t total_sent = 0;
+
+    while (msg->msg_iov->iov_len > 0) {
+        r = sendmsg(fd, msg, NULL);
+
+        if (r < 0) {
+	        switch (errno) {
+		        case EINTR:
+		        case EAGAIN:
+#if (EAGAIN != EWOULDBLOCK)
+		        case EWOULDBLOCK:
+#endif
+		            break;
+		        case ENOBUFS:
+		            return NET_SOFTERROR;
+		        default:
+		            return NET_HARDERROR;
+	        }
+	    } else if (r == 0) {
+	        return NET_SOFTERROR;
+        }
+
+        msg->msg_iov->iov_base  += r;
+        msg->msg_iov->iov_len   -= r;
+        total_sent              += r;
+        msg->msg_flags          = NULL;
+    }
+
+    return total_sent;
+}
+
+
+int
 has_sendfile(void)
 {
 #if defined(HAVE_SENDFILE)
