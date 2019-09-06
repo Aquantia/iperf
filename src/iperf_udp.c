@@ -33,6 +33,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/udp.h>
+#include <linux/if_ether.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -52,6 +56,10 @@
 # include <inttypes.h>
 #else
 # define PRIu64		"llu"
+#endif
+
+#ifndef UDP_SEGMENT
+#define UDP_SEGMENT 103     /* Set GSO segmentation size */
 #endif
 
 /* iperf_udp_recv
@@ -224,18 +232,47 @@ iperf_udp_send(struct iperf_stream *sp)
 	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
 	
     }
+    
+    uint16_t gso_size = ETH_DATA_LEN - sizeof(struct udphdr);
+    if (sp->settings->domain == AF_INET) {
+        gso_size -= sizeof(struct iphdr);
+    } else if (sp->settings->domain == AF_INET6) {
+        gso_size -= sizeof(struct ip6_hdr);
+    } else {
+        if (sp->settings->lso_udp_gso) {
+            perror("iperf_udp: unknown domain - disabling UDP GSO.");
+            sp->settings->lso_udp_gso = 0;
+            return -1;
+        }
+    }
+    if (sp->settings->blksize <= gso_size) {
+        sp->settings->lso_udp_gso = 0;
+    }
 
-    struct msghdr msg   = { 0 };
-    struct iovec iov    = { 0 };
+    if (sp->settings->lso_udp_gso) {
+        char control[CMSG_SPACE(sizeof(gso_size))] = { 0 };
+        struct msghdr msg   = { 0 };
+        struct iovec iov    = { 0 };
 
-    iov.iov_base        = sp->buffer;
-    iov.iov_len         = size;
+        iov.iov_base        = sp->buffer;
+        iov.iov_len         = size;
 
-    msg.msg_iov         = &iov;
-    msg.msg_iovlen      = 1;
+        msg.msg_iov         = &iov;
+        msg.msg_iovlen      = 1;
 
-    r = Nsendmsg(sp->socket, &msg);
-    //r = Nwrite(sp->socket, sp->buffer, size, Pudp);
+        msg.msg_control     = control;
+        msg.msg_controllen  = sizeof(control);
+        struct cmsghdr *cm  = CMSG_FIRSTHDR(&msg);
+        cm->cmsg_level      = SOL_UDP;
+        cm->cmsg_type       = UDP_SEGMENT;
+        cm->cmsg_len        = CMSG_LEN(sizeof(gso_size));
+        uint16_t *valp      = (uint16_t *)CMSG_DATA(cm);
+        *valp               = gso_size;
+
+        r = Nsendmsg(sp->socket, &msg);
+    } else {
+        r = Nwrite(sp->socket, sp->buffer, size, Pudp);
+    }
 
     if (r < 0)
 	return r;
@@ -542,6 +579,13 @@ iperf_udp_connect(struct iperf_test *test)
     tv.tv_usec = 0;
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(struct timeval));
 #endif
+
+    if (test->settings->lso_udp_gso) {
+        if (test->settings->domain == AF_UNSPEC) {
+            warning("Domain is unspecified! Using IPv4 by default");
+            test->settings->domain = AF_INET;
+        }
+    }
 
     /*
      * Write a datagram to the UDP stream to let the server know we're here.

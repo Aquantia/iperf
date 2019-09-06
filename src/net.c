@@ -314,15 +314,18 @@ Nread(int fd, char *buf, size_t count, int prot)
     register ssize_t r;
     register size_t nleft = count;
 
-    while (nleft > 0) {
-        r = read(fd, buf, nleft);
+     while (nleft > 0) {
+        if (prot == SOCK_DGRAM) {
+            r = recv(fd, buf, nleft, NULL);
+        } else {
+            r = read(fd, buf, nleft);
+        }
         if (r < 0) {
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
                 break;
             else
                 return NET_HARDERROR;
-        } else if (r == 0)
-            break;
+        }
 
         nleft -= r;
         buf += r;
@@ -342,26 +345,24 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
     register size_t nleft = count;
 
     while (nleft > 0) {
-	r = write(fd, buf, nleft);
-	if (r < 0) {
-	    switch (errno) {
-		case EINTR:
-		case EAGAIN:
+	    r = write(fd, buf, nleft);
+        if (r < 0) {
+	        switch (errno) {
+		        case EINTR:
+		        case EAGAIN:
 #if (EAGAIN != EWOULDBLOCK)
-		case EWOULDBLOCK:
+		        case EWOULDBLOCK:
 #endif
-		return count - nleft;
-
-		case ENOBUFS:
-		return NET_SOFTERROR;
-
-		default:
-		return NET_HARDERROR;
-	    }
-	} else if (r == 0)
-	    return NET_SOFTERROR;
-	nleft -= r;
-	buf += r;
+		            return count - nleft;
+		        case ENOBUFS:
+		            return NET_SOFTERROR;
+		        default:
+		        return NET_HARDERROR;
+	        }
+	    } else if (r == 0)
+	        return NET_SOFTERROR;
+	    nleft -= r;
+	    buf += r;
     }
     return count;
 }
@@ -372,10 +373,11 @@ Nsendmsg(int fd, struct msghdr *msg)
 {
     register ssize_t r;
     register ssize_t total_sent = 0;
+    ssize_t req = msg->msg_iov->iov_len;
 
     while (msg->msg_iov->iov_len > 0) {
         r = sendmsg(fd, msg, NULL);
-
+        
         if (r < 0) {
 	        switch (errno) {
 		        case EINTR:
