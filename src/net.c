@@ -314,21 +314,28 @@ Nread(int fd, char *buf, size_t count, int prot)
     register ssize_t r;
     register size_t nleft = count;
 
-     while (nleft > 0) {
-        if (prot == SOCK_DGRAM) {
-            r = recv(fd, buf, nleft, NULL);
-        } else {
-            r = read(fd, buf, nleft);
-        }
+    if (prot == SOCK_DGRAM) {
+        r = recv(fd, buf, nleft, NULL);
         if (r < 0) {
             if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
-                break;
+                return 0;
             else
                 return NET_HARDERROR;
         }
-
         nleft -= r;
-        buf += r;
+    } else {
+        while (nleft > 0) {
+            r = read(fd, buf, nleft);
+            if (r < 0) {
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+                    break;
+                else
+                    return NET_HARDERROR;
+            }
+
+            nleft -= r;
+            buf += r;
+        }
     }
     return count - nleft;
 }

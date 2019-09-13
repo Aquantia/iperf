@@ -71,6 +71,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 {
     uint32_t  sec, usec;
     uint64_t  pcount;
+    uint16_t  gso_part;
     int       r;
     int       size = sp->settings->blksize;
     double    transit = 0, d = 0;
@@ -95,9 +96,11 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    memcpy(&sec, sp->buffer, sizeof(sec));
 	    memcpy(&usec, sp->buffer+4, sizeof(usec));
 	    memcpy(&pcount, sp->buffer+8, sizeof(pcount));
+        memcpy(&gso_part, sp->buffer+16, sizeof(gso_part));
 	    sec = ntohl(sec);
 	    usec = ntohl(usec);
 	    pcount = be64toh(pcount);
+        gso_part = ntohs(gso_part);
 	    sent_time.secs = sec;
 	    sent_time.usecs = usec;
 	}
@@ -106,9 +109,11 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    memcpy(&sec, sp->buffer, sizeof(sec));
 	    memcpy(&usec, sp->buffer+4, sizeof(usec));
 	    memcpy(&pc, sp->buffer+8, sizeof(pc));
+        memcpy(&gso_part, sp->buffer+12, sizeof(gso_part));
 	    sec = ntohl(sec);
 	    usec = ntohl(usec);
 	    pcount = ntohl(pc);
+        gso_part = ntohs(gso_part);
 	    sent_time.secs = sec;
 	    sent_time.usecs = usec;
 	}
@@ -129,6 +134,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 	 * far (so we're expecting to see the packet with sequence number
 	 * sp->packet_count + 1 arrive next).
 	 */
+    if (!gso_part) {
 	if (pcount >= sp->packet_count + 1) {
 
 	    /* Forward, but is there a gap in sequence numbers? */
@@ -158,7 +164,8 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    /* Log the out-of-order packet */
 	    if (sp->test->debug) 
 		fprintf(stderr, "OUT OF ORDER - incoming packet sequence %" PRIu64 " but expected sequence %d on stream %d", pcount, sp->packet_count, sp->socket);
-	}
+    }
+    }
 
 	/*
 	 * jitter measurement
@@ -209,27 +216,64 @@ iperf_udp_send(struct iperf_stream *sp)
 
 	uint32_t  sec, usec;
 	uint64_t  pcount;
+    uint16_t  gso_part = 0;
 
 	sec = htonl(before.secs);
 	usec = htonl(before.usecs);
 	pcount = htobe64(sp->packet_count);
+    gso_part = htons(gso_part);
 	
-	memcpy(sp->buffer, &sec, sizeof(sec));
-	memcpy(sp->buffer+4, &usec, sizeof(usec));
-	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+    if (sp->settings->lso_udp_gso) {
+        /* Protection form lose part with counters. */
+        int i = 0;
+        char* buf = sp->buffer;
+        while (i < size) {
+            memcpy(buf, &sec, sizeof(sec));
+            memcpy(buf+4, &usec, sizeof(usec));
+            memcpy(buf+8, &pcount, sizeof(pcount));
+            memcpy(buf+16, &gso_part, sizeof(gso_part));
+            buf += sp->settings->gso_size;
+            i += sp->settings->gso_size;
+            gso_part = htons(ntohs(gso_part) + 1);
+        }
+
+    } else {
+        memcpy(sp->buffer, &sec, sizeof(sec));
+	    memcpy(sp->buffer+4, &usec, sizeof(usec));
+	    memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+        memcpy(sp->buffer+16, &gso_part, sizeof(gso_part));
+    }
 	
     }
     else {
 
 	uint32_t  sec, usec, pcount;
+    uint16_t  gso_part = 0;
 
 	sec = htonl(before.secs);
 	usec = htonl(before.usecs);
 	pcount = htonl(sp->packet_count);
+    gso_part = htons(gso_part);
 	
-	memcpy(sp->buffer, &sec, sizeof(sec));
-	memcpy(sp->buffer+4, &usec, sizeof(usec));
-	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+    if (sp->settings->lso_udp_gso) {
+        /* Protection form lose part with counters. */
+        int i = 0;
+        char* buf = sp->buffer;
+        while (i < size) {
+            memcpy(buf, &sec, sizeof(sec));
+            memcpy(buf+4, &usec, sizeof(usec));
+            memcpy(buf+8, &pcount, sizeof(pcount));
+            memcpy(buf+12, &gso_part, sizeof(gso_part));
+            buf += sp->settings->gso_size;
+            i += sp->settings->gso_size;
+            gso_part = htons(ntohs(gso_part) + 1);
+        }
+    } else {
+        memcpy(sp->buffer, &sec, sizeof(sec));
+	    memcpy(sp->buffer+4, &usec, sizeof(usec));
+	    memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+        memcpy(sp->buffer+12, &gso_part, sizeof(gso_part));
+    }
 	
     }
 
