@@ -185,6 +185,9 @@ const char usage_longstr[] = "Usage: iperf3 [-s|-c host] [options]\n"
                            "  --rsa-public-key-path     path to the RSA public key used to encrypt\n"
                            "                            authentication credentials\n"
 #endif //HAVESSL
+                           "  -- lso-udp-gso N          use Generic Segmentation Offload for UDP protocol\n"
+                           "                            N - segmentation size excluding IP and UDP headers\n"
+                           "                            Warning! See documentation to get more information about UDP GSO\n"
     
 #ifdef NOT_YET_SUPPORTED /* still working on these */
 #endif

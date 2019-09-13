@@ -399,6 +399,17 @@ the executable.
                  sequentially run several test suites, described in script  file.
                  The server address and port values are inherited from  the  main
                  test. Tests are described in a JSON format.
+	
+	  --lso-udp-gso N
+		 use Generic Segmentation Offload for UDP protocol.
+		 N - segmentation size exluding IP and UDP headers.
+                 Set 0 to auto-detect optimal value.
+		 Min value = 128 bytes.
+		 Max value equals MTU value minus IP and UDP headers.
+		 Max payload length (-l option) is 8192 (including IP and UDP
+		 headers).
+		 For better performance it is recommended to use max values of
+		 GSO size and payload length.
    
    
    EXAMPLES
