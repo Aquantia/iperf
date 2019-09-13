@@ -44,6 +44,9 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/ip6.h>
+#include <netinet/udp.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #ifdef HAVE_STDINT_H
@@ -58,6 +61,7 @@
 #include <setjmp.h>
 #include <stdarg.h>
 #include <linux/version.h>
+#include <linux/if_ether.h>
 
 #if defined(HAVE_CPUSET_SETAFFINITY)
 #include <sys/param.h>
@@ -94,6 +98,16 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 18, 0)
 #define SUPPORT_UDP_LARGE_SEND_OFFLOAD
 #endif
+
+#define MIN_GSO_SIZE 128
+
+/*
+ * Max UDP payload length.
+ * In general cases, length = IP payload length,
+ * but if we are using LSO UDP GSO, this value downfalls
+ * to 8192 including IP and UDP headers.
+ */
+#define UDP_MAX_LEN 8192
 
 /* Forwards. */
 static int send_parameters(struct iperf_test *test);
@@ -827,7 +841,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"help", no_argument, NULL, 'h'},
         {"multithread", no_argument, NULL, OPT_MULTITHREAD},
         {"thread-affinity", no_argument, NULL, OPT_THREAD_AFFINITY},
-        {"lso-udp-gso", no_argument, NULL, OPT_LSO_UDP_GSO},
+        {"lso-udp-gso", required_argument, NULL, OPT_LSO_UDP_GSO},
         {NULL, 0, NULL, 0}
     };
     int flag;
@@ -1229,6 +1243,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
             case OPT_LSO_UDP_GSO:
 #if defined(SUPPORT_UDP_LARGE_SEND_OFFLOAD)
                 test->settings->lso_udp_gso = 1;
+                test->settings->gso_size = unit_atoi(optarg);
 #else
                 warning("Your configuration isn't supporting generic segmentation offload for udp protocol");
 #endif
@@ -1368,7 +1383,83 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         warning("Debug output (-d) may interfere with JSON output (-J)");
     }
 
+    if (test->settings->lso_udp_gso) {
+        if (test->settings->domain == PF_UNSPEC) {
+            warning("Domain is unspecified! Using IPv4 by default.");
+        }
+        int max_blksize = get_max_blksize(test->settings->domain);
+        uint16_t max_gso_size = get_max_gsosize(test->settings->domain);
+        if (!max_blksize || !max_gso_size) {
+            warning("Unknown domain! Disabling LSO UDP GSO.");
+            test->settings->lso_udp_gso = 0;
+            test->settings->gso_size    = 0;
+        }
+
+        if (test->settings->lso_udp_gso) {
+            if (test->settings->blksize > max_blksize) {
+                warning("While LSO UDP GSO enabled, max Ethernet payload length is 8192 bytes!");
+                test->settings->blksize = max_blksize;
+            }
+
+            if (test->settings->gso_size > max_gso_size) {
+                warning("Max GSO size is 1500 bytes including IP and UDP headers!");
+                test->settings->gso_size = max_gso_size;
+            }
+
+            if (!test->settings->gso_size) {
+                test->settings->gso_size = max_gso_size;
+            }
+            
+            if (test->settings->gso_size < MIN_GSO_SIZE) {
+                warning("GSO size shouldn't be less then 128 bytes!");
+                test->settings->gso_size = MIN_GSO_SIZE;
+            }
+        }
+    }
+
     return 0;
+}
+
+int
+get_max_blksize(int domain)
+{
+    uint16_t max = UDP_MAX_LEN - sizeof(struct udphdr);
+    switch (domain) {
+        case PF_UNSPEC:
+            max -= sizeof(struct iphdr);
+            break;
+        case PF_INET:
+            max -= sizeof(struct iphdr);
+            break;
+        case PF_INET6:
+            max -= sizeof(struct ip6_hdr);
+            break;
+        default:
+            return 0;
+            break;
+    }
+    return max;
+}
+
+uint16_t
+get_max_gsosize(int domain)
+{
+    uint16_t max = ETH_DATA_LEN - sizeof(struct udphdr);
+    switch (domain) {
+        case PF_UNSPEC:
+            max -= sizeof(struct iphdr);
+            break;
+        case PF_INET:
+            max -= sizeof(struct iphdr);
+            break;
+        case PF_INET6:
+            max -= sizeof(struct ip6_hdr);
+            break;
+        default:
+            return 0;
+            break;
+    }
+    return max;
 }
 
 int

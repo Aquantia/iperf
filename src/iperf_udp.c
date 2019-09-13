@@ -232,25 +232,10 @@ iperf_udp_send(struct iperf_stream *sp)
 	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
 	
     }
-    
-    uint16_t gso_size = ETH_DATA_LEN - sizeof(struct udphdr);
-    if (sp->settings->domain == AF_INET) {
-        gso_size -= sizeof(struct iphdr);
-    } else if (sp->settings->domain == AF_INET6) {
-        gso_size -= sizeof(struct ip6_hdr);
-    } else {
-        if (sp->settings->lso_udp_gso) {
-            perror("iperf_udp: unknown domain - disabling UDP GSO.");
-            sp->settings->lso_udp_gso = 0;
-            return -1;
-        }
-    }
-    if (sp->settings->blksize <= gso_size) {
-        sp->settings->lso_udp_gso = 0;
-    }
 
-    if (sp->settings->lso_udp_gso) {
-        char control[CMSG_SPACE(sizeof(gso_size))] = { 0 };
+    if (sp->settings->lso_udp_gso && size > sp->settings->gso_size) {
+
+        char control[CMSG_SPACE(sizeof(sp->settings->gso_size))] = { 0 };
         struct msghdr msg   = { 0 };
         struct iovec iov    = { 0 };
 
@@ -265,9 +250,9 @@ iperf_udp_send(struct iperf_stream *sp)
         struct cmsghdr *cm  = CMSG_FIRSTHDR(&msg);
         cm->cmsg_level      = SOL_UDP;
         cm->cmsg_type       = UDP_SEGMENT;
-        cm->cmsg_len        = CMSG_LEN(sizeof(gso_size));
-        uint16_t *valp      = (uint16_t *)CMSG_DATA(cm);
-        *valp               = gso_size;
+        cm->cmsg_len        = CMSG_LEN(sizeof(sp->settings->gso_size));
+        uint16_t *valp      = (void *)CMSG_DATA(cm);
+        *valp               = sp->settings->gso_size;
 
         r = Nsendmsg(sp->socket, &msg);
     } else {
@@ -579,13 +564,6 @@ iperf_udp_connect(struct iperf_test *test)
     tv.tv_usec = 0;
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (struct timeval *)&tv, sizeof(struct timeval));
 #endif
-
-    if (test->settings->lso_udp_gso) {
-        if (test->settings->domain == AF_UNSPEC) {
-            warning("Domain is unspecified! Using IPv4 by default");
-            test->settings->domain = AF_INET;
-        }
-    }
 
     /*
      * Write a datagram to the UDP stream to let the server know we're here.
