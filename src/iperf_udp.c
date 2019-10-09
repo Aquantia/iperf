@@ -248,6 +248,10 @@ iperf_udp_send(struct iperf_stream *sp)
             buf      += sp->settings->lso_udp_segsize;
             i        += sp->settings->lso_udp_segsize;
             lso_part = htons(ntohs(lso_part) + 1);
+
+            if (i + sp->settings->lso_udp_segsize >= size) {
+                break;
+            }
         }
     } else {
         memcpy(sp->buffer, &sec, sizeof(sec));
@@ -280,6 +284,10 @@ iperf_udp_send(struct iperf_stream *sp)
             buf      += sp->settings->lso_udp_segsize;
             i        += sp->settings->lso_udp_segsize;
             lso_part = htons(ntohs(lso_part) + 1);
+
+            if (i + sp->settings->lso_udp_segsize >= size) {
+                break;
+            }
         }
     } else {
         memcpy(sp->buffer, &sec, sizeof(sec));

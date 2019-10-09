@@ -1381,8 +1381,6 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
     }
 
     if (test->settings->lso_udp) {
-        
-
         int prev_blksize = test->settings->blksize;
         uint64_t iphdr_len = 0;
         switch (test->settings->domain) {
