@@ -356,6 +356,7 @@ enum {
     IEBADFORMAT = 24,	    // Bad format argument to -f
     IEREVERSEBIDIR = 25,    // Iperf cannot be both reverse and bidirectional
     IEDOMAIN = 26,          // The specified domain isn't supported by some functions (check perror)
+    IEUDPSEGMENT = 27,      // The configuration doesn't support Large Segmentation Offload for UDP protocol
     /* Test errors */
     IENEWTEST = 100,        // Unable to create a new test (check perror)
     IEINITTEST = 101,       // Test initialization failed (check perror)

@@ -381,6 +381,9 @@ iperf_strerror(int int_errno)
         snprintf(errstr, len, "invalid domain");
         perr = 1;
         break;
+    case IEUDPSEGMENT:
+        snprintf(errstr, len, "your configuration doesn't support Large Segmentation Offload for UDP protocol");
+        break;
 	case IENEWTHREAD:
 	    snprintf(errstr, len, "unable to create new thread");
 	    break;

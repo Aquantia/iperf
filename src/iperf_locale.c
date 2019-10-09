@@ -189,7 +189,7 @@ const char usage_longstr[] = "Usage: iperf3 [-s|-c host] [options]\n"
                            "                            tic network load. Works only with -u key. It is recommended to\n"
                            "                            disable speed limit with -b 0 key."
                            "  --lso-udp N               enables Large Segmentation Offload for UDP protocol. \"N\" is a\n"
-                           "                            segment size, it cannot be less 1024 bytes or greater than MTU."
+                           "                            segment size, it cannot be greater than MTU including headers."
                            "                            Use \"--lso-udp 0\" to use blocksize (\"-l\" option) as a segment"
                            "                            size."
     

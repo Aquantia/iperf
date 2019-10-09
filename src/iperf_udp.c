@@ -103,9 +103,9 @@ iperf_udp_recv(struct iperf_stream *sp)
 	}
 	else {
 	    uint32_t pc;
-	    memcpy(&sec, sp->buffer, sizeof(sec));
-	    memcpy(&usec, sp->buffer+4, sizeof(usec));
-	    memcpy(&pc, sp->buffer+8, sizeof(pc));
+        memcpy(&sec, sp->buffer, sizeof(sec));
+        memcpy(&usec, sp->buffer+4, sizeof(usec));
+        memcpy(&pc, sp->buffer+8, sizeof(pc));
         memcpy(&lso_part, sp->buffer+12, sizeof(lso_part));
 	    sec = ntohl(sec);
 	    usec = ntohl(usec);
@@ -253,6 +253,7 @@ iperf_udp_send(struct iperf_stream *sp)
         memcpy(sp->buffer, &sec, sizeof(sec));
 	    memcpy(sp->buffer+4, &usec, sizeof(usec));
 	    memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+        memcpy(sp->buffer+16, &lso_part, sizeof(lso_part));
     }
 	
     }
@@ -282,8 +283,8 @@ iperf_udp_send(struct iperf_stream *sp)
         }
     } else {
         memcpy(sp->buffer, &sec, sizeof(sec));
-	    memcpy(sp->buffer+4, &usec, sizeof(usec));
-	    memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+        memcpy(sp->buffer+4, &usec, sizeof(usec));
+        memcpy(sp->buffer+8, &pcount, sizeof(pcount));
         memcpy(sp->buffer+12, &lso_part, sizeof(lso_part));
     }
 	
@@ -646,6 +647,13 @@ iperf_udp_connect(struct iperf_test *test)
         
     if (test->settings->lso_udp) {
         int level, name, val;
+        uint16_t test_lso_segsize;
+
+        if (getsockopt(s, SOL_UDP, UDP_SEGMENT, &test_lso_segsize, sizeof(test_lso_segsize))) {
+            i_errno = IEUDPSEGMENT;
+            test->settings->lso_udp = 0;
+            test->settings->lso_udp_segsize = 0;
+        }
 
         if (test->settings->domain == PF_UNSPEC ||
             test->settings->domain == PF_INET) {
