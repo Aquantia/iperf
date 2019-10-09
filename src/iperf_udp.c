@@ -648,8 +648,9 @@ iperf_udp_connect(struct iperf_test *test)
     if (test->settings->lso_udp) {
         int level, name, val;
         uint16_t test_lso_segsize;
+        socklen_t tlsoss_size;
 
-        if (getsockopt(s, SOL_UDP, UDP_SEGMENT, &test_lso_segsize, sizeof(test_lso_segsize))) {
+        if (getsockopt(s, SOL_UDP, UDP_SEGMENT, &test_lso_segsize, &tlsoss_size)) {
             i_errno = IEUDPSEGMENT;
             test->settings->lso_udp = 0;
             test->settings->lso_udp_segsize = 0;
