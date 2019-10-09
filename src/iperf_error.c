@@ -377,6 +377,10 @@ iperf_strerror(int int_errno)
 	case IEREVERSEBIDIR:
 	    snprintf(errstr, len, "cannot be both reverse and bidirectional");
             break;
+    case IEDOMAIN:
+        snprintf(errstr, len, "invalid domain");
+        perr = 1;
+        break;
 	case IENEWTHREAD:
 	    snprintf(errstr, len, "unable to create new thread");
 	    break;

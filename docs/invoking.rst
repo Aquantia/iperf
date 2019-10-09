@@ -399,10 +399,17 @@ the executable.
                  sequentially run several test suites, described in script  file.
                  The server address and port values are inherited from  the  main
                  test. Tests are described in a JSON format.
+
           --varlen
                  enable variable random UDP packet size. Client simulates realis-
                  tic network load. Works only with -u key. It is recommended to 
                  disable speed limit with -b 0 key.
+
+	  --lso-udp n
+		 enables Large Segmentation Offload for UDP protocol. "n" is a
+		 segment size, it cannot be less 1024 bytes or greater than MTU.
+		 Use "--lso-udp 0" to use blocksize ("-l" option) as a segment
+		 size.
    
    
    EXAMPLES

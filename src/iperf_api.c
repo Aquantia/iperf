@@ -60,6 +60,7 @@
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/udp.h>
+#include <linux/if_ether.h>
 #include <linux/version.h>
 
 #if defined(HAVE_CPUSET_SETAFFINITY)
@@ -103,6 +104,8 @@
 #ifndef UDP_SEGMENT
     #define UDP_SEGMENT 103 /* Set GSO segmentation size */
 #endif /* UDP_SEGMENT */
+
+#define LSO_UDP_MIN_SEGSIZE 1024
 
 /* Forwards. */
 static int send_parameters(struct iperf_test *test);
@@ -1377,6 +1380,51 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
     }
     if (test->json_output && test->debug) {
         warning("Debug output (-d) may interfere with JSON output (-J)");
+    }
+
+    if (test->settings->lso_udp) {
+        int prev_blksize = test->settings->blksize;
+        uint64_t iphdr_len = 0;
+        switch (test->settings->domain) {
+            case PF_UNSPEC:
+                warning("Domain is unspecified! Using IPv4 by default.");
+            case PF_INET:
+                iphdr_len = sizeof(struct iphdr);
+                break;
+            case PF_INET6:
+                iphdr_len = sizeof(struct ip6_hdr);
+                break;
+            default:
+                i_errno = IEDOMAIN;
+                perror("Current domain is unsupported by iperf LSO now. Disabling UDP LSO.");
+                test->settings->lso_udp = 0;
+                test->settings->lso_udp_segsize = 0;
+                break;
+        }
+
+        if (iphdr_len) {
+            if (!test->settings->lso_udp_segsize) {
+                test->settings->lso_udp_segsize = test->settings->blksize;
+                test->settings->blksize = ETH_MAX_MTU - iphdr_len - sizeof(struct udphdr);
+            }
+
+            if (test->settings->lso_udp_segsize < LSO_UDP_MIN_SEGSIZE) {
+                warning("UDP LSO segment size is less that minimum (1024 bytes). Using minimum instead of current.");
+                test->settings->lso_udp_segsize = LSO_UDP_MIN_SEGSIZE;
+            }
+
+            if (test->settings->lso_udp_segsize > ETH_DATA_LEN - iphdr_len - sizeof(struct udphdr)) {
+                warning("UDP LSO segment size exceeds maximum. Using maximum value instead of current.");
+                test->settings->lso_udp_segsize = ETH_DATA_LEN - iphdr_len - sizeof(struct udphdr);
+            }
+
+            if (test->settings->lso_udp_segsize >= test->settings->blksize) {
+                warning("UDP LSO segment size >= block size. The use of UDP LSO is impractical and may cause errors. Disabling UDP LSO.");
+                test->settings->blksize = prev_blksize;
+                test->settings->lso_udp = 0;
+                test->settings->lso_udp_segsize = 0;
+            }
+        }
     }
 
     return 0;

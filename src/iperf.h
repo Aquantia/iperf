@@ -160,7 +160,7 @@ struct iperf_settings
 #endif // HAVE_SSL
     int	      connect_timeout;	    /* socket connection timeout, in ms */
     int       lso_udp;              /* Large Send Offload for UDP protocol */
-    int       lso_udp_segsize;      /* UDP segment size */
+    uint16_t  lso_udp_segsize;      /* UDP segment size */
 };
 
 struct iperf_test;

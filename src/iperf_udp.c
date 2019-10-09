@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/udp.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
@@ -54,6 +55,10 @@
 # define PRIu64		"llu"
 #endif
 
+#ifndef UDP_SEGMENT
+    #define UDP_SEGMENT 103 /* Set GSO segmentation size */
+#endif
+
 /* iperf_udp_recv
  *
  * receives the data for UDP
@@ -63,6 +68,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 {
     uint32_t  sec, usec;
     uint64_t  pcount;
+    uint16_t  lso_part;
     int       r;
     int       size = sp->settings->blksize;
     double    transit = 0, d = 0;
@@ -87,9 +93,11 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    memcpy(&sec, sp->buffer, sizeof(sec));
 	    memcpy(&usec, sp->buffer+4, sizeof(usec));
 	    memcpy(&pcount, sp->buffer+8, sizeof(pcount));
+        memcpy(&lso_part, sp->buffer+16, sizeof(lso_part));
 	    sec = ntohl(sec);
 	    usec = ntohl(usec);
 	    pcount = be64toh(pcount);
+        lso_part = ntohs(lso_part);
 	    sent_time.secs = sec;
 	    sent_time.usecs = usec;
 	}
@@ -98,9 +106,11 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    memcpy(&sec, sp->buffer, sizeof(sec));
 	    memcpy(&usec, sp->buffer+4, sizeof(usec));
 	    memcpy(&pc, sp->buffer+8, sizeof(pc));
+        memcpy(&lso_part, sp->buffer+12, sizeof(lso_part));
 	    sec = ntohl(sec);
 	    usec = ntohl(usec);
 	    pcount = ntohl(pc);
+        lso_part = ntohs(lso_part);
 	    sent_time.secs = sec;
 	    sent_time.usecs = usec;
 	}
@@ -121,6 +131,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 	 * far (so we're expecting to see the packet with sequence number
 	 * sp->packet_count + 1 arrive next).
 	 */
+    if (!lso_part) {
 	if (pcount >= sp->packet_count + 1) {
 
 	    /* Forward, but is there a gap in sequence numbers? */
@@ -151,6 +162,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 	    if (sp->test->debug) 
 		fprintf(stderr, "OUT OF ORDER - incoming packet sequence %" PRIu64 " but expected sequence %d on stream %d", pcount, sp->packet_count, sp->socket);
 	}
+    }
 
 	/*
 	 * jitter measurement
@@ -201,9 +213,11 @@ iperf_udp_send(struct iperf_stream *sp)
      * RNG initializes during connecting client to a server.
     */
     if (sp->settings->varlen) {
-        int minimum_limit = sizeof(uint32_t) * 3; // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (32bit counters).
+        // sizeof(sec) + sizeof(usec) + sizeof(pcount) + sizeof(lso_part) : (32bit counters).
+        int minimum_limit = sizeof(uint32_t) * 3 + sizeof(uint16_t);
         if (sp->test->udp_counters_64bit)
-            minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t); // sizeof(sec) + sizeof(usec) + sizeof(pcount) : (64bit counters).
+            // sizeof(sec) + sizeof(usec) + sizeof(pcount) + sizeof(lso_part) : (64bit counters).
+            minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t) + sizeof(uint16_t);
         sp->current_varlen = minimum_limit + (int)rand() % (sp->settings->blksize - minimum_limit + 1);
         size = sp->current_varlen;
     }
@@ -214,31 +228,93 @@ iperf_udp_send(struct iperf_stream *sp)
 
 	uint32_t  sec, usec;
 	uint64_t  pcount;
+    uint16_t  lso_part = 0;
 
 	sec = htonl(before.secs);
 	usec = htonl(before.usecs);
 	pcount = htobe64(sp->packet_count);
-	
-	memcpy(sp->buffer, &sec, sizeof(sec));
-	memcpy(sp->buffer+4, &usec, sizeof(usec));
-	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+    lso_part = htons(lso_part);
+
+    if (sp->settings->lso_udp) {
+        /* protection from lose part with counters. */
+        int i = 0;
+        char* buf = sp->buffer;
+        while (i < size) {
+            memcpy(buf, &sec, sizeof(sec));
+	        memcpy(buf+4, &usec, sizeof(usec));
+	        memcpy(buf+8, &pcount, sizeof(pcount));
+            memcpy(buf+16, &lso_part, sizeof(lso_part));
+
+            buf      += sp->settings->lso_udp_segsize;
+            i        += sp->settings->lso_udp_segsize;
+            lso_part = htons(ntohs(lso_part) + 1);
+        }
+    } else {
+        memcpy(sp->buffer, &sec, sizeof(sec));
+	    memcpy(sp->buffer+4, &usec, sizeof(usec));
+	    memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+    }
 	
     }
     else {
 
 	uint32_t  sec, usec, pcount;
+    uint16_t  lso_part = 0;
 
 	sec = htonl(before.secs);
 	usec = htonl(before.usecs);
 	pcount = htonl(sp->packet_count);
-	
-	memcpy(sp->buffer, &sec, sizeof(sec));
-	memcpy(sp->buffer+4, &usec, sizeof(usec));
-	memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+    lso_part = htons(lso_part);
+
+    if (sp->settings->lso_udp) {
+        /* Protection from lose part with counters. */
+        int i = 0;
+        char* buf = sp->buffer;
+        while (i < size) {
+            memcpy(buf, &sec, sizeof(sec));
+	        memcpy(buf+4, &usec, sizeof(usec));
+	        memcpy(buf+8, &pcount, sizeof(pcount));
+            memcpy(buf+12, &lso_part, sizeof(lso_part));
+
+            buf      += sp->settings->lso_udp_segsize;
+            i        += sp->settings->lso_udp_segsize;
+            lso_part = htons(ntohs(lso_part) + 1);
+        }
+    } else {
+        memcpy(sp->buffer, &sec, sizeof(sec));
+	    memcpy(sp->buffer+4, &usec, sizeof(usec));
+	    memcpy(sp->buffer+8, &pcount, sizeof(pcount));
+        memcpy(sp->buffer+12, &lso_part, sizeof(lso_part));
+    }
 	
     }
 
-    r = Nwrite(sp->socket, sp->buffer, size, Pudp);
+    if (sp->settings->lso_udp) {
+        char control[CMSG_SPACE(sizeof(sp->settings->lso_udp_segsize))] = { 0 };
+        struct msghdr msg  = { 0 };
+        struct iovec iov   = { 0 };
+        struct cmsghdr *cm = NULL;
+        
+        iov.iov_base       = sp->buffer;
+        iov.iov_len        = size;
+
+        msg.msg_iov        = &iov;
+        msg.msg_iovlen     = 1;
+
+        msg.msg_control    = control;
+        msg.msg_controllen = sizeof(control);
+
+        cm                 = CMSG_FIRSTHDR(&msg);
+        cm->cmsg_level     = SOL_UDP;
+        cm->cmsg_type      = UDP_SEGMENT;
+        cm->cmsg_len       = CMSG_LEN(sizeof(sp->settings->lso_udp_segsize));
+        uint16_t *valp     = (uint16_t *)CMSG_DATA(cm);
+        *valp              = sp->settings->lso_udp_segsize;
+
+        r = Nsendmsg(sp->socket, &msg, Pudp);
+    } else {
+        r = Nwrite(sp->socket, sp->buffer, size, Pudp);
+    }
 
     if (r < 0)
 	return r;
@@ -567,6 +643,26 @@ iperf_udp_connect(struct iperf_test *test)
 
     if (test->settings->varlen)
         srand(time(NULL));
+        
+    if (test->settings->lso_udp) {
+        int level, name, val;
+
+        if (test->settings->domain == PF_UNSPEC ||
+            test->settings->domain == PF_INET) {
+                level = SOL_IP;
+                name  = IP_MTU_DISCOVER;
+                val   = IP_PMTUDISC_DO;
+        } else if (test->settings->domain == PF_INET6) {
+                level = SOL_IPV6;
+                name  = IPV6_MTU_DISCOVER;
+                val   = IPV6_PMTUDISC_DO;
+        }
+
+        if (setsockopt(s, level, name, &val, sizeof(val))) {
+            i_errno = IECONNECT;
+            perror("setsockopt path mtu");
+        }
+    }
 
     return s;
 }
