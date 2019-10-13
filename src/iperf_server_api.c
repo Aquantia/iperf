@@ -88,7 +88,10 @@ iperf_server_listen(struct iperf_test *test)
 
     if (!test->json_output) {
 	iperf_printf(test, "-----------------------------------------------------------\n");
-	iperf_printf(test, "Server listening on %d\n", test->server_port);
+	if (test->delay > 0 ) 
+        iperf_printf(test, "Server listening on %d  with max delay = %i\n", test->server_port, test->delay);
+    else
+        iperf_printf(test, "Server listening on %d\n", test->server_port);
 	iperf_printf(test, "-----------------------------------------------------------\n");
 	if (test->forceflush)
 	    iflush(test);
@@ -692,6 +695,13 @@ iperf_run_server(struct iperf_test *test)
 
 	if (result == 0 ||
 	    (timeout != NULL && timeout->tv_sec == 0 && timeout->tv_usec == 0)) {
+            // Delay start
+            if (test->delay > 0){
+                srand(time(NULL));
+                unsigned int i =rand()%(test->delay);
+                usleep(i*1000);
+            }
+            // Delay end
 	    /* Run the timers. */
 	    iperf_time_now(&now);
 	    tmr_run(&now);

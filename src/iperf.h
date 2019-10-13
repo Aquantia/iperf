@@ -297,6 +297,8 @@ struct iperf_test
     char     *remote_congestion_used;		/* what the other side used */
     char     *pidfile;				/* -P option */
 
+    unsigned int delay;         /* --delay server delay*/
+
     char     *logfile;				/* --logfile option */
     FILE     *outfile;
 
