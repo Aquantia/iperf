@@ -658,6 +658,26 @@ iperf_udp_connect(struct iperf_test *test)
         }
     }
 
+    if (test->settings->pmtu) {
+        int level, name, val;
+        if (test->settings->domain == PF_UNSPEC ||
+            test->settings->domain == PF_INET) {
+                level = SOL_IP;
+                name  = IP_MTU_DISCOVER;
+                val   = IP_PMTUDISC_DO;
+        } else if (test->settings->domain == PF_INET6) {
+                level = SOL_IPV6;
+                name  = IPV6_MTU_DISCOVER;
+                val   = IPV6_PMTUDISC_DO;
+        }
+
+        if (setsockopt(s, level, name, &val, sizeof(val))) {
+            i_errno = IECONNECT;
+            perror("Unable to set socket option Path MTU discovery");
+            return -1;
+        }
+    }
+
     return s;
 }
 

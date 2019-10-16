@@ -78,6 +78,7 @@ struct iperf_thread;
 #define OPT_SINGLE_SOCKET 23
 #define OPT_VAR_LEN 24
 #define OPT_UDP_LSO 25
+#define OPT_PMTU 26
 
 
 #define OPT_TEST_SET 101
