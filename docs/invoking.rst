@@ -409,6 +409,8 @@ the executable.
                  "--udp-lso 0" to use blocksize ("-l" option) as a segment size.
                  Attention! Spliting into too many fragments can lead to a crash
                  of "iperf" or statistics errors.
+          --pmtu
+                 enables Path MTU Discovery socket option.
    
    
    EXAMPLES

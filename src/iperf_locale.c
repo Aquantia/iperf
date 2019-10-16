@@ -194,6 +194,7 @@ const char usage_longstr[] = "Usage: iperf3 [-s|-c host] [options]\n"
                            "                            Use \"--udp-lso 0\" to use blocksize (\"-l\" option) as a segment\n"
                            "                            size. Attention! Splitting into too many fragments can lead to a\n"
                            "                            crash of \"iperf\" or statistics errors.\n"
+                           "  --pmtu                    enables Path MTU Discovery socket option.\n"
     
 #ifdef NOT_YET_SUPPORTED /* still working on these */
 #endif

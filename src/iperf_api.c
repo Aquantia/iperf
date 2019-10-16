@@ -833,6 +833,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"multithread", no_argument, NULL, OPT_MULTITHREAD},
         {"thread-affinity", no_argument, NULL, OPT_THREAD_AFFINITY},
         {"udp-lso", required_argument, NULL, OPT_UDP_LSO},
+        {"pmtu", no_argument, NULL, OPT_PMTU},
         {NULL, 0, NULL, 0}
     };
     int flag;
@@ -1241,6 +1242,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
             case OPT_UDP_LSO:
                 test->settings->udp_lso = 1;
                 test->settings->udp_lso_segsize = unit_atoi(optarg);
+                break;
+            case OPT_PMTU:
+                test->settings->pmtu = 1;
                 break;
             default:
                 usage_long(stderr);

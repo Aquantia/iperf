@@ -161,6 +161,7 @@ struct iperf_settings
     int	      connect_timeout;	    /* socket connection timeout, in ms */
     int       udp_lso;        	    /* Large Send Offload for UDP protocol */
     uint16_t  udp_lso_segsize;	    /* LSO segment size */
+    int       pmtu;                 /* PMTU discovery */
 };
 
 struct iperf_test;
