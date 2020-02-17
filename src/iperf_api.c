@@ -98,6 +98,10 @@
     #define UDP_SEGMENT 103 /* Set GSO segmentation size */
 #endif
 
+#ifndef ETH_MAX_MTU
+    #define ETH_MAX_MTU 0xFFFF
+#endif
+
 /* Forwards. */
 static int send_parameters(struct iperf_test *test);
 static int get_parameters(struct iperf_test *test);
