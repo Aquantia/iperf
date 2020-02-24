@@ -208,6 +208,21 @@ iperf_udp_send(struct iperf_stream *sp)
 
     iperf_time_now(&before);
 
+    /*
+     * If we're using --varlen, each packet will have random size in 
+     * range of [minimum_limit ; sp->settings->blksize].
+     * RNG initializes during connecting client to a server.
+    */
+    if (sp->settings->varlen) {
+        // sizeof(sec) + sizeof(usec) + sizeof(pcount) + sizeof(udp_lso_seg) : (32bit counters).
+        int minimum_limit = sizeof(uint32_t) * 3 + sizeof(uint16_t);
+        if (sp->test->udp_counters_64bit)
+            // sizeof(sec) + sizeof(usec) + sizeof(pcount) + sizeof(udp_lso_seg) : (64bit counters).
+            minimum_limit = sizeof(uint32_t) * 2 + sizeof(uint64_t) + sizeof(uint16_t);
+        sp->current_varlen = minimum_limit + (int)rand() % (sp->settings->blksize - minimum_limit + 1);
+        size = sp->current_varlen;
+    }
+
     ++sp->packet_count;
 
     if (sp->test->udp_counters_64bit) {
@@ -314,7 +329,7 @@ iperf_udp_send(struct iperf_stream *sp)
     sp->result->bytes_sent_this_interval += r;
 
     if (sp->test->debug)
-	printf("sent %d bytes of %d, total %" PRIu64 "\n", r, sp->settings->blksize, sp->result->bytes_sent);
+        printf("sent %d bytes of %d, total %" PRIu64 "\n", r, size, sp->result->bytes_sent);
 
     return r;
 }
@@ -632,6 +647,9 @@ iperf_udp_connect(struct iperf_test *test)
         return -1;
     }
 
+    if (test->settings->varlen)
+        srand(time(NULL));
+
 #if defined(__linux__)
     if (test->settings->udp_gso) {
         uint16_t t_udp_gso_value;
@@ -644,6 +662,26 @@ iperf_udp_connect(struct iperf_test *test)
         }
     }
 #endif
+
+    if (test->settings->pmtu) {
+        int level, name, val;
+        if (test->settings->domain == PF_UNSPEC ||
+            test->settings->domain == PF_INET) {
+                level = SOL_IP;
+                name  = IP_MTU_DISCOVER;
+                val   = IP_PMTUDISC_DO;
+        } else if (test->settings->domain == PF_INET6) {
+                level = SOL_IPV6;
+                name  = IPV6_MTU_DISCOVER;
+                val   = IPV6_PMTUDISC_DO;
+        }
+
+        if (setsockopt(s, level, name, &val, sizeof(val))) {
+            i_errno = IECONNECT;
+            perror("Unable to set socket option Path MTU discovery");
+            return -1;
+        }
+    }
 
     return s;
 }

@@ -295,10 +295,19 @@ the executable.
 
           --bidir
                  bidirectional mode, server and client send and receive data.
+
+          --multithread
+                 creates a number of threads equal to the number of streams. Each
+                 stream handled independently.
    
-          -w, --window n[KM]
-                 window  size  / socket buffer size (this gets sent to the server
-                 and used on that side too)
+          --thread-affinity
+                 experimental option. Use only with --multithread option.
+                 Sets each thread a affinity depending SO_INCOMING_CPU option.
+   
+          -w, --window n[KM]/n[KM],m[KM]
+                 window size / socket buffer size (this gets sent to  the  server
+                 and used  on that side too).    You can set different values for
+                 client / server side.
    
           -M, --set-mss n
                  set TCP/SCTP maximum segment size (MTU - 40 bytes)
@@ -389,12 +398,25 @@ the executable.
                  path to the RSA public key used to encrypt  authentication  cre-
                  dentials (if built with OpenSSL support)
 
+          --test-set file
+                 sequentially run several test suites, described in script  file.
+                 The server address and port values are inherited from  the  main
+                 test. Tests are described in a JSON format.
+
+          --varlen
+                 enable variable random UDP packet size. Client simulates realis-
+                 tic network load. Works only with -u key. It is recommended to 
+                 disable speed limit with -b 0 key.
+
           --udp-gso N
                  enables Generic Segmentation Offload for UDP protocol. "N" is a
                  segment size, it cannot be greater than MTU including headers.
                  Use "--udp-lso 0" to use blocksize ("-l" option) as a segment
                  size. Attention! Spliting into too many fragments can lead to a
                  crash of "iperf" or statistics errors. Supported only by Linux!
+
+          --pmtu
+                 enables Path MTU Discovery socket option.
 
    
    EXAMPLES

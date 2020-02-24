@@ -68,6 +68,8 @@
 #include <openssl/evp.h>
 #endif // HAVE_SSL
 
+#include <pthread.h>
+
 typedef uint64_t iperf_size_t;
 
 struct iperf_interval_results
@@ -111,6 +113,7 @@ struct iperf_stream_result
     iperf_size_t bytes_received_this_interval;
     iperf_size_t bytes_sent_this_interval;
     iperf_size_t bytes_sent_omit;
+    iperf_size_t bytes_for_previous_interval;
     int stream_prev_total_retrans;
     int stream_retrans;
     int stream_prev_total_sacks;
@@ -134,7 +137,9 @@ struct iperf_settings
 {
     int       domain;               /* AF_INET or AF_INET6 */
     int       socket_bufsize;       /* window size for TCP */
+    int       server_socket_bufsize;/* server window size for TCP */
     int       blksize;              /* size of read/writes (-l) */
+    int       varlen;               /* Variable block size */
     uint64_t  rate;                 /* target data rate for application pacing*/
     uint64_t  fqrate;               /* target data rate for FQ pacing*/
     int	      pacing_timer;	    /* pacing timer in microseconds */
@@ -156,6 +161,7 @@ struct iperf_settings
     int	      connect_timeout;	    /* socket connection timeout, in ms */
     int       udp_gso;        	    /* Generic Segmentation Offload for UDP protocol */
     uint16_t  udp_gso_segsize;	    /* GSO segment size */
+    int       pmtu;                 /* PMTU discovery */
 };
 
 struct iperf_test;
@@ -197,6 +203,7 @@ struct iperf_stream
     int       cnt_error;
     int       omitted_cnt_error;
     uint64_t  target;
+    int       current_varlen;
 
     struct sockaddr_storage local_addr;
     struct sockaddr_storage remote_addr;
@@ -210,6 +217,10 @@ struct iperf_stream
 
 //    struct iperf_stream *next;
     SLIST_ENTRY(iperf_stream) streams;
+
+    /* --multithread use only*/
+    int bytes_sent;
+    int blocks_sent;
 
     void     *data;
 };
@@ -243,6 +254,24 @@ enum iperf_mode {
 	BIDIRECTIONAL = -1
 };
 
+struct iperf_thread {
+    int id;
+    pthread_t thread;
+
+    struct iperf_test *test;
+    struct iperf_stream *stream;
+};
+
+struct iperf_threads_control {
+    int num_threads;
+    struct iperf_thread *threads;
+
+    pthread_barrier_t initial_barrier;
+    pthread_mutex_t send_mutex;
+    pthread_mutex_t receive_mutex;
+    int started;
+};
+
 struct iperf_test
 {
     char      role;                             /* 'c' lient or 's' erver */
@@ -271,8 +300,12 @@ struct iperf_test
     char     *remote_congestion_used;		/* what the other side used */
     char     *pidfile;				/* -P option */
 
+    unsigned int delay;         /* --delay server delay*/
+
     char     *logfile;				/* --logfile option */
     FILE     *outfile;
+
+    char     *test_set_file;		/* file with test for --test-set*/
 
     int       ctrl_sck;
     int       listener;
@@ -285,12 +318,15 @@ struct iperf_test
     EVP_PKEY  *server_rsa_private_key;
 #endif // HAVE_SSL
 
+    struct iperf_threads_control *thrcontrol;
+
     /* boolean variables for Options */
     int       daemon;                           /* -D option */
     int       one_off;                          /* -1 option */
     int       no_delay;                         /* -N option */
     int       reverse;                          /* -R option */
     int       bidirectional;                    /* --bidirectional */
+    int       ssock;                            /* --ssock - single socket for bidirectional mode */
     int	      verbose;                          /* -V option - verbose mode */
     int	      json_output;                      /* -J option - JSON output */
     int	      zerocopy;                         /* -Z option - use sendfile */
@@ -300,6 +336,8 @@ struct iperf_test
     int       forceflush; /* --forceflush - flushing output at every interval */
     int	      multisend;
     int	      repeating_payload;                /* --repeating-payload */
+    int       multithread;                      /* --multithread option */
+    int       thread_affinity;                  /* --thread-affinity option. Use only with --multithread option */
 
     char     *json_output_string; /* rendered JSON output if json_output is set */
     /* Select related parameters */

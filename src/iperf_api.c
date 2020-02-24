@@ -93,6 +93,9 @@
 #include "iperf_auth.h"
 #endif /* HAVE_SSL */
 
+#include <pthread.h>
+#include <sys/sysinfo.h>
+
 #ifndef UDP_SEGMENT
     #define UDP_SEGMENT 103 /* Set GSO segmentation size */
 #endif
@@ -352,6 +355,12 @@ int
 iperf_get_test_no_delay(struct iperf_test *ipt)
 {
     return ipt->no_delay;
+}
+
+int
+iperf_is_bidir_ssock(struct iperf_test* ipt)
+{
+    return ipt->mode == BIDIRECTIONAL && ipt->ssock == 1;
 }
 
 /************** Setter routines for some fields inside iperf_test *************/
@@ -817,9 +826,11 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"bytes", required_argument, NULL, 'n'},
         {"blockcount", required_argument, NULL, 'k'},
         {"length", required_argument, NULL, 'l'},
+        {"varlen", no_argument, NULL, OPT_VAR_LEN},
         {"parallel", required_argument, NULL, 'P'},
         {"reverse", no_argument, NULL, 'R'},
         {"bidir", no_argument, NULL, OPT_BIDIRECTIONAL},
+        {"ssock", no_argument, NULL, OPT_SINGLE_SOCKET},
         {"window", required_argument, NULL, 'w'},
         {"bind", required_argument, NULL, 'B'},
         {"cport", required_argument, NULL, OPT_CLIENT_PORT},
@@ -828,7 +839,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"version4", no_argument, NULL, '4'},
         {"version6", no_argument, NULL, '6'},
         {"tos", required_argument, NULL, 'S'},
+        {"delay", required_argument, NULL, 'delay'},
         {"dscp", required_argument, NULL, OPT_DSCP},
+        {"test-set", required_argument, NULL, OPT_TEST_SET},
 	{"extra-data", required_argument, NULL, OPT_EXTRA_DATA},
 #if defined(HAVE_FLOWLABEL)
         {"flowlabel", required_argument, NULL, 'L'},
@@ -867,7 +880,10 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 	{"connect-timeout", required_argument, NULL, OPT_CONNECT_TIMEOUT},
         {"debug", no_argument, NULL, 'd'},
         {"help", no_argument, NULL, 'h'},
+        {"multithread", no_argument, NULL, OPT_MULTITHREAD},
+        {"thread-affinity", no_argument, NULL, OPT_THREAD_AFFINITY},
         {"udp-gso", required_argument, NULL, OPT_UDP_GSO},
+        {"pmtu", no_argument, NULL, OPT_PMTU},
         {NULL, 0, NULL, 0}
     };
     int flag;
@@ -875,9 +891,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
     int blksize;
     int server_flag, client_flag, rate_flag, duration_flag;
     char *endptr;
-#if defined(HAVE_CPU_AFFINITY)
     char* comma;
-#endif /* HAVE_CPU_AFFINITY */
     char* slash;
     struct xbind_entry *xbe;
     double farg;
@@ -1020,6 +1034,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 blksize = unit_atoi(optarg);
 		client_flag = 1;
                 break;
+            case OPT_VAR_LEN:
+                test->settings->varlen = 1;
+                break;
             case 'P':
                 test->num_streams = atoi(optarg);
                 if (test->num_streams > MAX_STREAMS) {
@@ -1044,6 +1061,15 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 iperf_set_test_bidirectional(test, 1);
                 client_flag = 1;
                 break;
+            case OPT_SINGLE_SOCKET:
+                test->ssock = 1;
+                break;
+            case OPT_MULTITHREAD:
+                test->multithread = 1;
+                break;
+            case OPT_THREAD_AFFINITY:
+                test->thread_affinity = 1;
+                break;
             case 'w':
                 // XXX: This is a socket buffer, not specific to TCP
 		// Do sanity checks as double-precision floating point 
@@ -1054,6 +1080,17 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     return -1;
                 }
                 test->settings->socket_bufsize = (int) farg;
+                comma = strchr(optarg, ',');
+                if (comma != NULL) {
+                    test->settings->server_socket_bufsize = unit_atof(comma + 1);
+                    if (test->settings->server_socket_bufsize > (double)MAX_TCP_BUFFER) {
+                        i_errno = IEBUFSIZE;
+                        return -1;
+                    }
+                }
+                else {
+                    test->settings->server_socket_bufsize = test->settings->socket_bufsize;
+                }
 		client_flag = 1;
                 break;
             case 'B':
@@ -1094,6 +1131,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 		    return -1;
 		}
 		client_flag = 1;
+                break;
+            case 'delay':
+                test->delay = atoi(optarg);
                 break;
 	    case OPT_DSCP:
                 test->settings->tos = parse_qos(optarg);
@@ -1254,6 +1294,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 		test->settings->connect_timeout = unit_atoi(optarg);
 		client_flag = 1;
 		break;
+	    case OPT_TEST_SET:
+		test->test_set_file = strdup(optarg);
+		break;
 	    case 'h':
 		usage_long(stdout);
 		exit(0);
@@ -1262,6 +1305,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 test->settings->udp_gso = 1;
                 test->settings->udp_gso_segsize = unit_atoi(optarg);
 #endif
+                break;
+            case OPT_PMTU:
+                test->settings->pmtu = 1;
                 break;
             default:
                 usage_long(stderr);
@@ -1775,8 +1821,10 @@ send_parameters(struct iperf_test *test)
 	    cJSON_AddTrueToObject(j, "reverse");
 	if (test->bidirectional)
 	            cJSON_AddTrueToObject(j, "bidirectional");
+    if (test->ssock)
+        cJSON_AddTrueToObject(j, "ssock");
 	if (test->settings->socket_bufsize)
-	    cJSON_AddNumberToObject(j, "window", test->settings->socket_bufsize);
+	    cJSON_AddNumberToObject(j, "window", test->settings->server_socket_bufsize);
 	if (test->settings->blksize)
 	    cJSON_AddNumberToObject(j, "len", test->settings->blksize);
 	if (test->settings->rate)
@@ -1873,6 +1921,8 @@ get_parameters(struct iperf_test *test)
 	    iperf_set_test_reverse(test, 1);
         if ((j_p = cJSON_GetObjectItem(j, "bidirectional")) != NULL)
             iperf_set_test_bidirectional(test, 1);
+        if ((j_p = cJSON_GetObjectItem(j, "ssock")) != NULL)
+            test->ssock = 1;
 	if ((j_p = cJSON_GetObjectItem(j, "window")) != NULL)
 	    test->settings->socket_bufsize = j_p->valueint;
 	if ((j_p = cJSON_GetObjectItem(j, "len")) != NULL)
@@ -2536,6 +2586,8 @@ iperf_free_test(struct iperf_test *test)
 	free(test->congestion_used);
     if (test->remote_congestion_used)
 	free(test->remote_congestion_used);
+    if (test->test_set_file)
+	free(test->test_set_file);
     if (test->omit_timer != NULL)
 	tmr_cancel(test->omit_timer);
     if (test->timer != NULL)
@@ -2596,6 +2648,9 @@ iperf_reset_test(struct iperf_test *test)
 {
     struct iperf_stream *sp;
 
+    if (test->multithread)
+        iperf_delete_threads(test);
+
     /* Free streams */
     while (!SLIST_EMPTY(&test->streams)) {
         sp = SLIST_FIRST(&test->streams);
@@ -2650,6 +2705,7 @@ iperf_reset_test(struct iperf_test *test)
 
     test->reverse = 0;
     test->bidirectional = 0;
+    test->ssock = 0;
     test->no_delay = 0;
 
     FD_ZERO(&test->read_set);
@@ -2726,6 +2782,7 @@ iperf_reset_stats(struct iperf_test *test)
 	rp = sp->result;
         rp->bytes_sent_omit = rp->bytes_sent;
         rp->bytes_received = 0;
+        rp->bytes_for_previous_interval = 0;
         rp->bytes_sent_this_interval = rp->bytes_received_this_interval = 0;
 	if (test->sender_has_retransmits == 1) {
 	    struct iperf_interval_results ir; /* temporary results structure */
@@ -2751,11 +2808,13 @@ iperf_stats_callback(struct iperf_test *test)
     struct iperf_stream_result *rp = NULL;
     struct iperf_interval_results *irp, temp;
     struct iperf_time temp_time;
+    iperf_size_t bytes_temp;
 
     temp.omitted = test->omitting;
     SLIST_FOREACH(sp, &test->streams, streams) {
         rp = sp->result;
-	temp.bytes_transferred = sp->sender ? rp->bytes_sent_this_interval : rp->bytes_received_this_interval;
+        bytes_temp = sp->sender ? rp->bytes_sent_this_interval : rp->bytes_received_this_interval;
+        temp.bytes_transferred = bytes_temp - rp->bytes_for_previous_interval;
      
 	irp = TAILQ_LAST(&rp->interval_results, irlisthead);
         /* result->end_time contains timestamp of previous interval */
@@ -2813,7 +2872,7 @@ iperf_stats_callback(struct iperf_test *test)
 	    temp.cnt_error = sp->cnt_error;
 	}
         add_to_interval_list(rp, &temp);
-        rp->bytes_sent_this_interval = rp->bytes_received_this_interval = 0;
+        rp->bytes_for_previous_interval = bytes_temp;
     }
 }
 
@@ -3491,7 +3550,7 @@ iperf_print_results(struct iperf_test *test)
             }
 
             /* Print server output if we're on the client and it was requested/provided */
-            if (test->role == 'c' && iperf_get_test_get_server_output(test) && !test->json_output) {
+            if (test->role == 'c' && iperf_get_test_get_server_output(test)) {
                 if (test->json_server_output) {
                     iperf_printf(test, "\nServer JSON output:\n%s\n", cJSON_Print(test->json_server_output));
                     cJSON_Delete(test->json_server_output);
@@ -4215,4 +4274,270 @@ int
 iflush(struct iperf_test *test)
 {
     return fflush(test->outfile);
+}
+
+void
+iperf_thread_hdl(int signal)
+{
+    return;
+}
+
+int
+iperf_create_threads(struct iperf_test *test)
+{
+    struct iperf_stream *sp;
+    int i = 0;
+
+    test->thrcontrol = malloc(sizeof(struct iperf_threads_control));
+    /* TODO: add i_errno */
+    if (!test->thrcontrol)
+        return -1;
+
+    test->thrcontrol->num_threads = test->num_streams;
+    test->thrcontrol->started = 0;
+
+    if (test->bidirectional)
+        test->thrcontrol->num_threads *= 2;
+
+    test->thrcontrol->threads = malloc(sizeof(struct iperf_thread) * test->thrcontrol->num_threads);
+    if (!test->thrcontrol->threads)
+        return -1;
+
+    if (pthread_barrier_init(&test->thrcontrol->initial_barrier, NULL, test->thrcontrol->num_threads + 1)) {
+        i_errno = IEINITBARRIER;
+        return -1;
+    }
+
+    SLIST_FOREACH(sp, &test->streams, streams){
+        if (iperf_new_thread(test, sp, i, &test->thrcontrol->threads[i]) < 0)
+            return -1;
+        ++i;
+    }
+
+    /* Mutex initialization */
+    switch(test->mode) {
+    case SENDER:
+        if (pthread_mutex_init(&test->thrcontrol->send_mutex, NULL)) {
+            i_errno = IEINITMUTEX;
+            return -1;
+        }
+        break;
+    case RECEIVER:
+        if (pthread_mutex_init(&test->thrcontrol->receive_mutex, NULL)) {
+            i_errno = IEINITMUTEX;
+            return -1;
+        }
+        break;
+    case BIDIRECTIONAL:
+        if (pthread_mutex_init(&test->thrcontrol->send_mutex, NULL) ||
+                pthread_mutex_init(&test->thrcontrol->receive_mutex, NULL)) {
+            i_errno = IEINITMUTEX;
+            return -1;
+        }
+        break;
+    }
+
+    return 0;
+}
+
+int
+iperf_new_thread(struct iperf_test *test, struct iperf_stream *sp, int id, struct iperf_thread *thr)
+{
+    thr->test = test;
+    thr->stream = sp;
+    thr->id = id;
+
+    sp->blocks_sent = 0;
+    sp->bytes_sent = 0;
+
+    if (pthread_create(&thr->thread, NULL, iperf_run_thread, thr)) {
+        i_errno = IENEWTHREAD;
+        return -1;
+    }
+
+    return 0;
+}
+
+void*
+iperf_run_thread(void *argv)
+{
+    int status;
+    struct iperf_thread *thr = argv;
+
+    /* set handler for SIGUSR1 */
+    struct sigaction act;
+    sigset_t   set;
+
+    memset(&act, 0, sizeof(act));
+    act.sa_handler = iperf_thread_hdl;
+    sigemptyset(&set);
+    sigaddset(&set, SIGUSR1);
+    act.sa_mask = set;
+    sigaction(SIGUSR1, &act, 0);
+
+
+    if (thr->test->thread_affinity)
+        iperf_set_thread_affinity(thr);
+
+    status = pthread_barrier_wait(&thr->test->thrcontrol->initial_barrier);
+    if (status == PTHREAD_BARRIER_SERIAL_THREAD) {
+        pthread_barrier_destroy(&thr->test->thrcontrol->initial_barrier);
+    } else if (status != 0) {
+        i_errno = IEWAITBARRIER;
+        exit(-1);
+    }
+
+    if (thr->stream->sender) {
+        while (thr->test->state == TEST_RUNNING)
+            iperf_thread_send(thr);
+    } else {
+        while (thr->test->state == TEST_RUNNING)
+            iperf_thread_recv(thr);
+    }
+
+    return NULL;
+}
+
+int
+iperf_thread_send(struct iperf_thread *thr)
+{
+    register int multisend, r, streams_active;
+    struct iperf_test *test= thr->test;
+    register struct iperf_stream *sp = thr->stream;
+    struct timeval now;
+
+    /* Can we do multisend mode? */
+    if (test->settings->burst != 0)
+        multisend = test->settings->burst;
+    else if (test->settings->rate == 0)
+        multisend = test->multisend;
+    else
+        multisend = 1;  /* nope */
+
+    for (; multisend > 0; --multisend) {
+        if (test->settings->rate != 0 && test->settings->burst == 0)
+            gettimeofday(&now, NULL);
+        streams_active = 0;
+
+        if (sp->green_light) {
+            if ((r = sp->snd(sp)) < 0) {
+                if (r == NET_SOFTERROR)
+                    break;
+                i_errno = IESTREAMWRITE;
+                return r;
+            }
+            streams_active = 1;
+
+
+//            pthread_mutex_lock(&thr->test->thrcontrol->send_mutex);
+//            test->bytes_sent += r;
+//            ++test->blocks_sent;
+//            pthread_mutex_unlock(&thr->test->thrcontrol->send_mutex);
+
+            /* XXX: split counter for each thread */
+            sp->bytes_sent += r;
+            ++sp->blocks_sent;
+
+            if (test->settings->rate != 0 && test->settings->burst == 0)
+                iperf_check_throttle(sp, &now);
+            if (multisend > 1 && test->settings->bytes != 0 && test->bytes_sent >= test->settings->bytes)
+                break;
+            if (multisend > 1 && test->settings->blocks != 0 && test->blocks_sent >= test->settings->blocks)
+                break;
+        }
+
+        if (!streams_active)
+            break;
+    }
+
+    if (test->settings->burst != 0) {
+        gettimeofday(&now, NULL);
+        iperf_check_throttle(sp, &now);
+    }
+
+    return 0;
+}
+
+int
+iperf_thread_recv(struct iperf_thread *thr)
+{
+    int r;
+
+    if ((r = thr->stream->rcv(thr->stream)) < 0) {
+        i_errno = IESTREAMREAD;
+        return r;
+    }
+
+    /* XXX: bytes_received and blocks_received are never used. Do we need to count it? */
+//    pthread_mutex_lock(&thr->test->thrcontrol->receive_mutex);
+//    thr->test->bytes_received += r;
+//    ++thr->test->blocks_received;
+//    pthread_mutex_unlock(&thr->test->thrcontrol->receive_mutex);
+
+    return 0;
+}
+
+int
+iperf_delete_threads(struct iperf_test *test)
+{
+    struct iperf_thread thr;
+    struct iperf_threads_control *control;
+    int i;
+
+    control = test->thrcontrol;
+
+    if (control) {
+        if (control->threads) {
+            for (i = 0; i < control->num_threads; ++i) {
+                thr = control->threads[i];
+                pthread_kill(thr.thread, SIGUSR1);
+                pthread_join(thr.thread, NULL);
+            }
+
+            free(control->threads);
+            control->threads = NULL;
+        }
+
+        switch (test->mode) {
+        case SENDER:
+            pthread_mutex_destroy(&control->send_mutex);
+            break;
+        case RECEIVER:
+            pthread_mutex_destroy(&control->receive_mutex);
+            break;
+        case BIDIRECTIONAL:
+            pthread_mutex_destroy(&control->send_mutex);
+            pthread_mutex_destroy(&control->receive_mutex);
+            break;
+        }
+
+        free(control);
+        test->thrcontrol = NULL;
+    }
+
+    return 0;
+}
+
+int
+iperf_set_thread_affinity(struct iperf_thread *thr)
+{
+#if defined(HAVE_SCHED_SETAFFINITY)
+    cpu_set_t cpu_set;
+    uint cpu_num;
+    int cpu;
+    socklen_t cpu_len = sizeof(cpu);
+
+    cpu_num = get_nprocs();
+    cpu = thr->id % cpu_num;
+
+    getsockopt(thr->stream->socket, SOL_SOCKET, SO_INCOMING_CPU, &cpu, &cpu_len);
+
+    CPU_ZERO(&cpu_set);
+    CPU_SET(cpu, &cpu_set);
+    if (sched_setaffinity(0, sizeof(cpu_set_t), &cpu_set) != 0) {
+        i_errno = IEAFFINITY;
+        return -1;
+    }
+#endif
+    return 0;
 }

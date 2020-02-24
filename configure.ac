@@ -52,7 +52,12 @@ if test "x$GCC" = "xyes"; then
   CFLAGS="$CFLAGS -Wall"
 fi
 
-# Check if enable profiling
+# Add -lpthread if we are using GCC
+if test "x$GCC" = "xyes"; then
+  CFLAGS="$CFLAGS -lpthread"
+fi
+
+# Check if profiling must be disabled
 AC_ARG_ENABLE([profiling],
     AS_HELP_STRING([--enable-profiling], [Enable iperf profiling binary]),
     [enable_profiling=yes],

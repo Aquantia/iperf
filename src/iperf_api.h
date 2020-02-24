@@ -44,6 +44,7 @@ struct iperf_stream_result;
 struct iperf_interval_results;
 struct iperf_stream;
 struct iperf_time;
+struct iperf_thread;
 
 /* default settings */
 #define Ptcp SOCK_STREAM
@@ -73,7 +74,15 @@ struct iperf_time;
 #define OPT_REPEATING_PAYLOAD 18
 #define OPT_EXTRA_DATA 19
 #define OPT_BIDIRECTIONAL 20
+#define OPT_MULTITHREAD 21
+#define OPT_THREAD_AFFINITY 22
+#define OPT_SINGLE_SOCKET 23
+#define OPT_VAR_LEN 24
 #define OPT_UDP_GSO 25
+#define OPT_PMTU 26
+
+
+#define OPT_TEST_SET 101
 
 /* states */
 #define TEST_START 1
@@ -129,6 +138,7 @@ int iperf_get_test_tos( struct iperf_test* ipt );
 char*	iperf_get_extra_data( struct iperf_test* ipt );
 char*	iperf_get_iperf_version(void);
 int	iperf_get_test_no_delay( struct iperf_test* ipt );
+int     iperf_is_bidir_ssock( struct iperf_test* ipt );
 
 /* Setter routines for some fields inside iperf_test. */
 void	iperf_set_verbose( struct iperf_test* ipt, int verbose );
@@ -164,6 +174,7 @@ void    iperf_set_test_tos( struct iperf_test* ipt, int tos );
 void	iperf_set_test_extra_data( struct iperf_test* ipt, char *dat );
 void    iperf_set_test_bidirectional( struct iperf_test* ipt, int bidirectional);
 void    iperf_set_test_no_delay( struct iperf_test* ipt, int no_delay);
+void	iperf_set_extra_data( struct iperf_test* ipt, char *dat);
 
 #if defined(HAVE_SSL)
 void    iperf_set_test_client_username(struct iperf_test *ipt, char *client_username);
@@ -312,6 +323,16 @@ int iperf_clearaffinity(struct iperf_test *);
 int iperf_printf(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3)));
 int iflush(struct iperf_test *test);
 
+/* Multithread option */
+
+int iperf_create_threads(struct iperf_test *);
+int iperf_new_thread(struct iperf_test *, struct iperf_stream *, int, struct iperf_thread *);
+void *iperf_run_thread(void *);
+int iperf_thread_send(struct iperf_thread *);
+int iperf_thread_recv(struct iperf_thread *);
+int iperf_delete_threads(struct iperf_test *);
+int iperf_set_thread_affinity(struct iperf_thread *);
+
 /* Error routines. */
 void iperf_err(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3)));
 void iperf_errexit(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3),noreturn));
@@ -347,7 +368,7 @@ enum {
     IEREVERSEBIDIR = 25,    // Iperf cannot be both reverse and bidirectional
     IEBADPORT = 26,	    // Bad port number
     IEDOMAIN = 27,          // The specified domain doesn't supported by some functions (check perror)
-    IEUDPGSO = 28,          // The configuration doesn't LSO for UDP protocol
+    IEUDPGSO = 28,          // The configuration doesn't GSO for UDP protocol
     /* Test errors */
     IENEWTEST = 100,        // Unable to create a new test (check perror)
     IEINITTEST = 101,       // Test initialization failed (check perror)
@@ -405,6 +426,11 @@ enum {
     /* Timer errors */
     IENEWTIMER = 300,       // Unable to create new timer (check perror)
     IEUPDATETIMER = 301,    // Unable to update timer (check perror)
+    /* Threads errors */
+    IENEWTHREAD = 400,      // Unable to create new thread
+    IEINITBARRIER = 401,    // Unable to init barrier
+    IEINITMUTEX = 402,      // Unable to init mutex
+    IEWAITBARRIER = 403,    // Error wait barrier
 };
 
 
