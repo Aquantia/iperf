@@ -146,9 +146,9 @@ LTLIBRARIES = $(lib_LTLIBRARIES)
 libiperf_la_LIBADD =
 am_libiperf_la_OBJECTS = cjson.lo iperf_api.lo iperf_error.lo \
 	iperf_auth.lo iperf_client_api.lo iperf_locale.lo \
-	iperf_server_api.lo iperf_tcp.lo iperf_udp.lo iperf_sctp.lo \
-	iperf_util.lo iperf_time.lo dscp.lo net.lo tcp_info.lo \
-	timer.lo units.lo
+	iperf_server_api.lo iperf_tcp.lo iperf_test_set.lo \
+	iperf_udp.lo iperf_sctp.lo iperf_util.lo iperf_time.lo dscp.lo \
+	net.lo tcp_info.lo timer.lo units.lo
 libiperf_la_OBJECTS = $(am_libiperf_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -163,11 +163,11 @@ iperf3_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 am__iperf3_profile_SOURCES_DIST = main.c cjson.c cjson.h flowlabel.h \
 	iperf.h iperf_api.c iperf_api.h iperf_error.c iperf_auth.h \
 	iperf_auth.c iperf_client_api.c iperf_locale.c iperf_locale.h \
-	iperf_server_api.c iperf_tcp.c iperf_tcp.h iperf_udp.c \
-	iperf_udp.h iperf_sctp.c iperf_sctp.h iperf_util.c \
-	iperf_util.h iperf_time.c iperf_time.h dscp.c net.c net.h \
-	portable_endian.h queue.h tcp_info.c timer.c timer.h units.c \
-	units.h version.h
+	iperf_server_api.c iperf_tcp.c iperf_tcp.h iperf_test_set.c \
+	iperf_test_set.h iperf_udp.c iperf_udp.h iperf_sctp.c \
+	iperf_sctp.h iperf_util.c iperf_util.h iperf_time.c \
+	iperf_time.h dscp.c net.c net.h portable_endian.h queue.h \
+	tcp_info.c timer.c timer.h units.c units.h version.h
 am__objects_1 = iperf3_profile-cjson.$(OBJEXT) \
 	iperf3_profile-iperf_api.$(OBJEXT) \
 	iperf3_profile-iperf_error.$(OBJEXT) \
@@ -176,6 +176,7 @@ am__objects_1 = iperf3_profile-cjson.$(OBJEXT) \
 	iperf3_profile-iperf_locale.$(OBJEXT) \
 	iperf3_profile-iperf_server_api.$(OBJEXT) \
 	iperf3_profile-iperf_tcp.$(OBJEXT) \
+	iperf3_profile-iperf_test_set.$(OBJEXT) \
 	iperf3_profile-iperf_udp.$(OBJEXT) \
 	iperf3_profile-iperf_sctp.$(OBJEXT) \
 	iperf3_profile-iperf_util.$(OBJEXT) \
@@ -242,6 +243,7 @@ am__depfiles_remade = ./$(DEPDIR)/cjson.Plo ./$(DEPDIR)/dscp.Plo \
 	./$(DEPDIR)/iperf3_profile-iperf_sctp.Po \
 	./$(DEPDIR)/iperf3_profile-iperf_server_api.Po \
 	./$(DEPDIR)/iperf3_profile-iperf_tcp.Po \
+	./$(DEPDIR)/iperf3_profile-iperf_test_set.Po \
 	./$(DEPDIR)/iperf3_profile-iperf_time.Po \
 	./$(DEPDIR)/iperf3_profile-iperf_udp.Po \
 	./$(DEPDIR)/iperf3_profile-iperf_util.Po \
@@ -253,12 +255,13 @@ am__depfiles_remade = ./$(DEPDIR)/cjson.Plo ./$(DEPDIR)/dscp.Plo \
 	./$(DEPDIR)/iperf_auth.Plo ./$(DEPDIR)/iperf_client_api.Plo \
 	./$(DEPDIR)/iperf_error.Plo ./$(DEPDIR)/iperf_locale.Plo \
 	./$(DEPDIR)/iperf_sctp.Plo ./$(DEPDIR)/iperf_server_api.Plo \
-	./$(DEPDIR)/iperf_tcp.Plo ./$(DEPDIR)/iperf_time.Plo \
-	./$(DEPDIR)/iperf_udp.Plo ./$(DEPDIR)/iperf_util.Plo \
-	./$(DEPDIR)/net.Plo ./$(DEPDIR)/t_api-t_api.Po \
-	./$(DEPDIR)/t_timer-t_timer.Po ./$(DEPDIR)/t_units-t_units.Po \
-	./$(DEPDIR)/t_uuid-t_uuid.Po ./$(DEPDIR)/tcp_info.Plo \
-	./$(DEPDIR)/timer.Plo ./$(DEPDIR)/units.Plo
+	./$(DEPDIR)/iperf_tcp.Plo ./$(DEPDIR)/iperf_test_set.Plo \
+	./$(DEPDIR)/iperf_time.Plo ./$(DEPDIR)/iperf_udp.Plo \
+	./$(DEPDIR)/iperf_util.Plo ./$(DEPDIR)/net.Plo \
+	./$(DEPDIR)/t_api-t_api.Po ./$(DEPDIR)/t_timer-t_timer.Po \
+	./$(DEPDIR)/t_units-t_units.Po ./$(DEPDIR)/t_uuid-t_uuid.Po \
+	./$(DEPDIR)/tcp_info.Plo ./$(DEPDIR)/timer.Plo \
+	./$(DEPDIR)/units.Plo
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -609,6 +612,7 @@ pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
+runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
@@ -637,6 +641,8 @@ libiperf_la_SOURCES = \
                         iperf_server_api.c \
                         iperf_tcp.c \
                         iperf_tcp.h \
+                        iperf_test_set.c \
+                        iperf_test_set.h \
                         iperf_udp.c \
                         iperf_udp.h \
                         iperf_sctp.c \
@@ -883,6 +889,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_sctp.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_server_api.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_tcp.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_test_set.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_time.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_udp.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf3_profile-iperf_util.Po@am__quote@ # am--include-marker
@@ -899,6 +906,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_sctp.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_server_api.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_tcp.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_test_set.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_time.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_udp.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/iperf_util.Plo@am__quote@ # am--include-marker
@@ -1077,6 +1085,20 @@ iperf3_profile-iperf_tcp.obj: iperf_tcp.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='iperf_tcp.c' object='iperf3_profile-iperf_tcp.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(iperf3_profile_CFLAGS) $(CFLAGS) -c -o iperf3_profile-iperf_tcp.obj `if test -f 'iperf_tcp.c'; then $(CYGPATH_W) 'iperf_tcp.c'; else $(CYGPATH_W) '$(srcdir)/iperf_tcp.c'; fi`
+
+iperf3_profile-iperf_test_set.o: iperf_test_set.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(iperf3_profile_CFLAGS) $(CFLAGS) -MT iperf3_profile-iperf_test_set.o -MD -MP -MF $(DEPDIR)/iperf3_profile-iperf_test_set.Tpo -c -o iperf3_profile-iperf_test_set.o `test -f 'iperf_test_set.c' || echo '$(srcdir)/'`iperf_test_set.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/iperf3_profile-iperf_test_set.Tpo $(DEPDIR)/iperf3_profile-iperf_test_set.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='iperf_test_set.c' object='iperf3_profile-iperf_test_set.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(iperf3_profile_CFLAGS) $(CFLAGS) -c -o iperf3_profile-iperf_test_set.o `test -f 'iperf_test_set.c' || echo '$(srcdir)/'`iperf_test_set.c
+
+iperf3_profile-iperf_test_set.obj: iperf_test_set.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(iperf3_profile_CFLAGS) $(CFLAGS) -MT iperf3_profile-iperf_test_set.obj -MD -MP -MF $(DEPDIR)/iperf3_profile-iperf_test_set.Tpo -c -o iperf3_profile-iperf_test_set.obj `if test -f 'iperf_test_set.c'; then $(CYGPATH_W) 'iperf_test_set.c'; else $(CYGPATH_W) '$(srcdir)/iperf_test_set.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/iperf3_profile-iperf_test_set.Tpo $(DEPDIR)/iperf3_profile-iperf_test_set.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='iperf_test_set.c' object='iperf3_profile-iperf_test_set.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(iperf3_profile_CFLAGS) $(CFLAGS) -c -o iperf3_profile-iperf_test_set.obj `if test -f 'iperf_test_set.c'; then $(CYGPATH_W) 'iperf_test_set.c'; else $(CYGPATH_W) '$(srcdir)/iperf_test_set.c'; fi`
 
 iperf3_profile-iperf_udp.o: iperf_udp.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(iperf3_profile_CFLAGS) $(CFLAGS) -MT iperf3_profile-iperf_udp.o -MD -MP -MF $(DEPDIR)/iperf3_profile-iperf_udp.Tpo -c -o iperf3_profile-iperf_udp.o `test -f 'iperf_udp.c' || echo '$(srcdir)/'`iperf_udp.c
@@ -1705,6 +1727,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_sctp.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_server_api.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_tcp.Po
+	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_test_set.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_time.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_udp.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_util.Po
@@ -1721,6 +1744,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/iperf_sctp.Plo
 	-rm -f ./$(DEPDIR)/iperf_server_api.Plo
 	-rm -f ./$(DEPDIR)/iperf_tcp.Plo
+	-rm -f ./$(DEPDIR)/iperf_test_set.Plo
 	-rm -f ./$(DEPDIR)/iperf_time.Plo
 	-rm -f ./$(DEPDIR)/iperf_udp.Plo
 	-rm -f ./$(DEPDIR)/iperf_util.Plo
@@ -1790,6 +1814,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_sctp.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_server_api.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_tcp.Po
+	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_test_set.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_time.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_udp.Po
 	-rm -f ./$(DEPDIR)/iperf3_profile-iperf_util.Po
@@ -1806,6 +1831,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/iperf_sctp.Plo
 	-rm -f ./$(DEPDIR)/iperf_server_api.Plo
 	-rm -f ./$(DEPDIR)/iperf_tcp.Plo
+	-rm -f ./$(DEPDIR)/iperf_test_set.Plo
 	-rm -f ./$(DEPDIR)/iperf_time.Plo
 	-rm -f ./$(DEPDIR)/iperf_udp.Plo
 	-rm -f ./$(DEPDIR)/iperf_util.Plo

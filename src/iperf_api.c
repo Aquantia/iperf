@@ -1853,6 +1853,8 @@ send_parameters(struct iperf_test *test)
 	    cJSON_AddNumberToObject(j, "udp_counters_64bit", iperf_get_test_udp_counters_64bit(test));
 	if (test->repeating_payload)
 	    cJSON_AddNumberToObject(j, "repeating_payload", test->repeating_payload);
+    if (test->multithread)
+        cJSON_AddTrueToObject(j, "multithread");
 #if defined(HAVE_SSL)
     if (test->settings->client_username && test->settings->client_password && test->settings->client_rsa_pubkey){
         encode_auth_setting(test->settings->client_username, test->settings->client_password, test->settings->client_rsa_pubkey, &test->settings->authtoken);
@@ -1953,6 +1955,8 @@ get_parameters(struct iperf_test *test)
 	    iperf_set_test_udp_counters_64bit(test, 1);
 	if ((j_p = cJSON_GetObjectItem(j, "repeating_payload")) != NULL)
 	    test->repeating_payload = 1;
+    if ((j_p = cJSON_GetObjectItem(j, "multithread")) != NULL)
+        test->multithread = 1;
 #if defined(HAVE_SSL)
 	if ((j_p = cJSON_GetObjectItem(j, "authtoken")) != NULL)
         test->settings->authtoken = strdup(j_p->valuestring);
