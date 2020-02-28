@@ -340,6 +340,7 @@ iperf_handle_message_client(struct iperf_test *test)
 int
 iperf_connect(struct iperf_test *test)
 {
+    if (test->force_udp) printf("Start client without connect to setver by UDP\n");
     FD_ZERO(&test->read_set);
     FD_ZERO(&test->write_set);
 
@@ -349,10 +350,14 @@ iperf_connect(struct iperf_test *test)
     if (test->ctrl_sck < 0)
 	// Create the control channel using an ephemeral port
 	test->ctrl_sck = netdial(test->settings->domain, Ptcp, test->bind_address, 0, test->server_hostname, test->server_port, test->settings->connect_timeout);
-    if (test->ctrl_sck < 0) {
-        i_errno = IECONNECT;
-        return -1;
-    }
+
+    if (test->force_udp)
+        if (test->ctrl_sck < 0) test->ctrl_sck = 0;
+    else 
+        if ((test->ctrl_sck < 0)) {
+            i_errno = IECONNECT;
+            return -1;
+        }
 
     if (Nwrite(test->ctrl_sck, test->cookie, COOKIE_SIZE, Ptcp) < 0) {
         i_errno = IESENDCOOKIE;
@@ -491,7 +496,7 @@ iperf_run_client(struct iperf_test * test)
     /* Start the client and connect to the server */
     if (iperf_connect(test) < 0)
         return -1;
-
+        
     /* Begin calculating CPU utilization */
     cpu_util(NULL);
 
@@ -501,57 +506,61 @@ iperf_run_client(struct iperf_test * test)
 	memcpy(&write_set, &test->write_set, sizeof(fd_set));
 	iperf_time_now(&now);
 	timeout = tmr_timeout(&now);
-	result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
+	if (!(test->force_udp)) result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
+    else result = 1 ;
 	if (result < 0 && errno != EINTR) {
   	    i_errno = IESELECT;
 	    return -1;
 	}
-	if (result > 0) {
-	    if (FD_ISSET(test->ctrl_sck, &read_set)) {
- 	        if (iperf_handle_message_client(test) < 0) {
-		    return -1;
-		}
-		FD_CLR(test->ctrl_sck, &read_set);
-	    }
-	}
-
+    if (test->force_udp) {
+        test->state = TEST_RUNNING;
+    } else {
+        if (result > 0) {
+            if (FD_ISSET(test->ctrl_sck, &read_set)) {
+                if (iperf_handle_message_client(test) < 0) {
+                    return -1;
+                }
+                FD_CLR(test->ctrl_sck, &read_set);
+            }
+        }
+    }
 	if (test->state == TEST_RUNNING) {
 
 	    /* Is this our first time really running? */
 	    if (startup) {
 	        startup = 0;
 
-		// Set non-blocking for non-UDP tests
-		if (test->protocol->id != Pudp) {
-		    SLIST_FOREACH(sp, &test->streams, streams) {
-			setnonblocking(sp->socket, 1);
-		    }
-		}
+	    	// Set non-blocking for non-UDP tests
+	    	if (test->protocol->id != Pudp) {
+	    	    SLIST_FOREACH(sp, &test->streams, streams) {
+	    		setnonblocking(sp->socket, 1);
+	    	    }
+	    	}
 	    }
 
 	    if (test->multithread) {
-                if (!test->thrcontrol->started) {
-                    int status;
+            if (!test->thrcontrol->started) {
+                int status;
 
-                    test->thrcontrol->started = 1;
-                    status = pthread_barrier_wait(&test->thrcontrol->initial_barrier);
-                    if (status == PTHREAD_BARRIER_SERIAL_THREAD) {
-                        pthread_barrier_destroy(&test->thrcontrol->initial_barrier);
-                    }
+                test->thrcontrol->started = 1;
+                status = pthread_barrier_wait(&test->thrcontrol->initial_barrier);
+                if (status == PTHREAD_BARRIER_SERIAL_THREAD) {
+                    pthread_barrier_destroy(&test->thrcontrol->initial_barrier);
                 }
+            }
 
                 usleep(1000);
 
-                if (test->mode != RECEIVER) {
+            if (test->mode != RECEIVER) {
 
-                    test->blocks_sent = 0;
-                    test->bytes_sent = 0;
+                test->blocks_sent = 0;
+                test->bytes_sent = 0;
 
-                    SLIST_FOREACH(sp, &test->streams, streams) {
-                        test->bytes_sent += sp->bytes_sent;
-                        test->blocks_sent += sp->blocks_sent;
-                    }
+                SLIST_FOREACH(sp, &test->streams, streams) {
+                    test->bytes_sent += sp->bytes_sent;
+                    test->blocks_sent += sp->blocks_sent;
                 }
+            }
 	    }
 	    else {
                 if (test->mode == BIDIRECTIONAL)
@@ -562,8 +571,11 @@ iperf_run_client(struct iperf_test * test)
                         return -1;
                 } else if (test->mode == SENDER) {
                     // Regular mode. Client sends.
-                    if (iperf_send(test, &write_set) < 0)
+                    int is = iperf_send(test, &write_set);
+                    if (is < 0) {
                         return -1;
+                    }
+
                 } else {
                     // Reverse mode. Client receives.
                     if (iperf_recv(test, &read_set) < 0)
@@ -592,7 +604,6 @@ iperf_run_client(struct iperf_test * test)
 
 		/* If multisend we must to count the result after stopping all threads */
 		if (test->multithread && test->mode != RECEIVER) {
-
                     test->blocks_sent = 0;
                     test->bytes_sent = 0;
 

@@ -820,6 +820,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"server", no_argument, NULL, 's'},
         {"client", required_argument, NULL, 'c'},
         {"udp", no_argument, NULL, 'u'},
+        {"force-udp", no_argument, NULL, 'fu'},
         {"bitrate", required_argument, NULL, 'b'},
         {"bandwidth", required_argument, NULL, 'b'},
         {"time", required_argument, NULL, 't'},
@@ -978,6 +979,9 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
             case 'u':
                 set_protocol(test, Pudp);
 		client_flag = 1;
+                break;
+            case 'fu':
+                test->force_udp = 1;
                 break;
             case OPT_SCTP:
 #if defined(HAVE_SCTP)
@@ -1553,7 +1557,9 @@ iperf_send(struct iperf_test *test, fd_set *write_setP)
 	if (test->settings->rate != 0 && test->settings->burst == 0)
 	    iperf_time_now(&now);
 	streams_active = 0;
-	SLIST_FOREACH(sp, &test->streams, streams) {
+    
+	SLIST_FOREACH(sp, &test->streams, streams)  {
+        if (write_setP == NULL || FD_ISSET(sp->socket, write_setP)) 
 	    if ((sp->green_light && sp->sender &&
 		 (write_setP == NULL || FD_ISSET(sp->socket, write_setP)))) {
 		if ((r = sp->snd(sp)) < 0) {
